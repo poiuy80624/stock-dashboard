@@ -19,7 +19,7 @@ from mcp.server.mcpserver import MCPServer  # noqa: E402
 from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 
 from core.db import DEFAULT_DB, get_history as db_history, open_db  # noqa: E402
-from core.trend import classify_trend  # noqa: E402
+from core.trend import classify_macd, classify_trend  # noqa: E402
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("stock_mcp")
@@ -83,10 +83,12 @@ def create_server() -> MCPServer:
 
     @mcp.tool()
     def get_trend(stock_id: str) -> dict:
-        """取得單一台股最新的 MA5、MA20 與趨勢判斷。
-        規則：收盤 > MA5 > MA20 為多頭；收盤 < MA5 < MA20 為空頭；其餘為盤整；均線資料不足時為「資料不足」。
+        """取得單一台股最新的 MA5、MA20、均線趨勢判斷，以及 MACD（DIF、訊號線、柱狀體與多空狀態）。
+        均線規則：收盤 > MA5 > MA20 為多頭；收盤 < MA5 < MA20 為空頭；其餘為盤整；資料不足時為「資料不足」。
+        MACD 狀態：黃金交叉、死亡交叉、偏多、偏空；資料不足（少於約 34 個交易日）時為「資料不足」。
         stock_id 為股票代號字串，例如 '2330'（不是公司名稱）。"""
-        r = _load(stock_id, 1)[0]
+        rows = _load(stock_id, 2)
+        r, prev = rows[-1], (rows[-2] if len(rows) > 1 else None)
         return {
             "stock_id": stock_id,
             "date": r["date"],
@@ -94,6 +96,10 @@ def create_server() -> MCPServer:
             "ma5": r["ma5"],
             "ma20": r["ma20"],
             "trend": classify_trend(r["close"], r["ma5"], r["ma20"]),
+            "macd": r["macd"],
+            "macd_signal": r["macd_signal"],
+            "macd_hist": r["macd_hist"],
+            "macd_state": classify_macd(r["macd_hist"], prev["macd_hist"] if prev else None),
         }
 
     return mcp

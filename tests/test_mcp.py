@@ -44,6 +44,7 @@ async def test_三個_tool_正常(db):
     assert q["date"] == "2026-10-25" and q["close"] == 25.0
     t = _data(await _call("get_trend", {"stock_id": "2330"}))
     assert t["trend"] == "多頭" and t["ma5"] == 23.0
+    assert t["macd_state"] == "資料不足"          # 只有 25 筆，不足以算出 MACD 訊號線
     h = _data(await _call("get_history", {"stock_id": "2330", "days": 10}))
     assert h["count"] == 10 and h["rows"][0]["date"] < h["rows"][-1]["date"]
 

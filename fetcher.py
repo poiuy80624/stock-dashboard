@@ -23,7 +23,15 @@ import requests
 import yaml
 from dotenv import load_dotenv
 
-from core.db import ROOT, last_date, log_fetch, open_db, upsert_prices
+from functools import partial
+
+from core.db import (
+    ROOT, last_date, last_date_in, log_fetch, open_db, upsert_foreign_holding, upsert_index_prices,
+    upsert_institutional, upsert_prices, upsert_total_institutional,
+)
+from core.extras import (
+    INDEX_SPECS, normalize_foreign, normalize_index, normalize_institutional, normalize_total,
+)
 from core.indicators import update_indicators
 
 URL = "https://api.finmindtrade.com/api/v4/data"
@@ -223,6 +231,79 @@ def run(
     return 1 if (permanent or transient or aborted or incomplete) else 0
 
 
+def run_extras(
+    cfg: dict,
+    conn: sqlite3.Connection,
+    *,
+    fetch_fn: Callable[[str, dict], list[dict]],
+    now_fn: Callable[[], datetime] | None = None,
+    backfill: int | None = None,
+) -> int:
+    """抓取指數、個股三大法人、外資持股、整體三大法人。
+
+    這些資料不做等待重試：沒抓到的日子，下次執行會從「最後一天 + 1」自動補齊。回傳失敗的項目數。
+    """
+    now_fn = now_fn or (lambda: datetime.now(TZ))
+    today = now_fn().date()
+    default_back = int(cfg.get("default_backfill_days", 120))
+
+    # (標籤, 資料表, 對象, FinMind dataset, 額外參數, 正規化函式, 寫入函式)
+    tasks = []
+    for sid in (str(s) for s in cfg["stocks"]):
+        tasks.append((f"法人買賣 {sid}", "institutional", sid, "TaiwanStockInstitutionalInvestorsBuySell",
+                      {"data_id": sid}, normalize_institutional, upsert_institutional))
+        tasks.append((f"外資持股 {sid}", "foreign_holding", sid, "TaiwanStockShareholding",
+                      {"data_id": sid}, normalize_foreign, upsert_foreign_holding))
+    tasks.append(("整體三大法人", "total_institutional", None, "TaiwanStockTotalInstitutionalInvestors",
+                  {}, normalize_total, upsert_total_institutional))
+    for spec in INDEX_SPECS:
+        tasks.append((f"指數 {spec['name']}", "index_prices", spec["symbol"], spec["dataset"],
+                      {"data_id": spec["data_id"]}, partial(normalize_index, spec), upsert_index_prices))
+
+    failures = 0
+    for label, table, key, dataset, params, normalize, upsert in tasks:
+        last = last_date_in(conn, table, key)
+        if backfill:
+            start = today - timedelta(days=backfill)
+        elif last:
+            start = date.fromisoformat(last) + timedelta(days=1)
+        else:
+            start = today - timedelta(days=default_back)
+        if start > today:
+            continue
+        try:
+            rows = fetch_fn(dataset, {**params, "start_date": start.isoformat(), "end_date": today.isoformat()})
+            n = upsert(conn, normalize(rows))
+            conn.commit()
+            if n:
+                log.info("%s：寫入 %d 筆（%s ~ %s）", label, n, start, today)
+        except QuotaExceededError as e:
+            log.error("%s", e)
+            log_fetch(conn, key, "error", f"{label}：{e}", now_fn())
+            conn.commit()
+            failures += 1
+            break
+        except (FetchError, requests.RequestException) as e:
+            log.error("%s 抓取失敗：%s", label, e)
+            log_fetch(conn, key, "error", f"{label}：{e}", now_fn())
+            conn.commit()
+            failures += 1
+    return failures
+
+
+def ensure_indicators(conn: sqlite3.Connection, stocks: list[str]) -> None:
+    """舊資料庫升級後，最新一筆若還沒有 MACD（且資料夠多），就重算該股指標。"""
+    for sid in stocks:
+        n = conn.execute("SELECT COUNT(*) FROM prices WHERE stock_id = ? AND close > 0", (sid,)).fetchone()[0]
+        row = conn.execute(
+            "SELECT macd FROM indicators WHERE stock_id = ? ORDER BY date DESC LIMIT 1", (sid,)
+        ).fetchone()
+        if n >= 35 and (row is None or row["macd"] is None):
+            update_indicators(conn, sid)
+            log.info("%s：重新計算指標（補上 MACD）", sid)
+    conn.commit()
+
+
 def setup_logging() -> None:
     (ROOT / "logs").mkdir(exist_ok=True)
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
@@ -256,7 +337,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     with open_db(ROOT / cfg["db_path"]) as conn:
-        return run(cfg, conn, token=token, backfill=args.backfill, wait=not args.no_wait)
+        code = run(cfg, conn, token=token, backfill=args.backfill, wait=not args.no_wait)
+        extra_failures = run_extras(
+            cfg, conn, fetch_fn=lambda ds, p: fetch_dataset(ds, p, token), backfill=args.backfill
+        )
+        ensure_indicators(conn, [str(s) for s in cfg["stocks"]])
+        return 1 if (code or extra_failures) else 0
 
 
 if __name__ == "__main__":

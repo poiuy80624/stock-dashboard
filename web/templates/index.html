@@ -3,136 +3,418 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>股票分析</title>
+<title>{{ title }}</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
 <style>
   :root {
-    --bg: #fafaf8; --fg: #1d1d1b; --muted: #6b6b66; --card: #fff; --line: #e3e3dd;
-    --up: #d63a3a; --down: #1f9d62; --ma5: #e08a00; --ma20: #3b6fd4;
+    --bg: #fafaf8; --fg: #1d1d1b; --muted: #6b6b66; --card: #fff; --line: #e3e3dd; --side: #f1f1ed;
+    --accent: #3b6fd4; --up: #d63a3a; --down: #1f9d62; --ma5: #e08a00; --ma20: #3b6fd4; --th: #f4f4f0;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #161615; --fg: #ececE8; --muted: #9a9a93; --card: #1f1f1d; --line: #33332f;
-            --up: #ff6b6b; --down: #3ecf8e; --ma5: #ffb341; --ma20: #6fa0ff; }
+    :root { --bg: #161615; --fg: #ececE8; --muted: #9a9a93; --card: #1f1f1d; --line: #33332f; --side: #1b1b19;
+            --accent: #6fa0ff; --up: #ff6b6b; --down: #3ecf8e; --ma5: #ffb341; --ma20: #6fa0ff; --th: #262624; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg);
          font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; }
-  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
-  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
-  h1 { font-size: 20px; margin: 0; }
-  .controls { display: flex; gap: 8px; align-items: center; }
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { width: 232px; flex: none; background: var(--side); border-right: 1px solid var(--line);
+             padding: 20px 12px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .brand { font-size: 20px; font-weight: 700; padding: 0 10px 16px; }
+  nav a { display: block; padding: 10px 12px; margin-bottom: 4px; border-radius: 8px; color: var(--fg);
+          text-decoration: none; font-size: 14.5px; }
+  nav a:hover { background: var(--line); }
+  nav a.active { background: var(--accent); color: #fff; font-weight: 600; }
+  .side-foot { color: var(--muted); font-size: 12px; padding: 16px 10px 0; line-height: 1.6; }
+  main { flex: 1; min-width: 0; padding: 20px 20px 40px; max-width: 1180px; }
+  .page { display: none; } .page.active { display: block; }
+  h2 { font-size: 18px; margin: 0; }
+  .head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   select { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
            background: var(--card); color: var(--fg); }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
   .card .k { font-size: 12px; color: var(--muted); }
-  .card .v { font-size: 22px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .card .v { font-size: 20px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .card .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .card.pick { cursor: pointer; } .card.pick:hover { border-color: var(--accent); }
+  .card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
   .up { color: var(--up); } .down { color: var(--down); }
-  #chart { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px; height: 680px; }
-  @media (max-width: 600px) { #chart { height: 520px; } }
-  #msg { color: var(--muted); padding: 12px 0; }
-  footer { color: var(--muted); font-size: 12px; margin-top: 14px; }
+  .chart { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px; margin-bottom: 14px; }
+  .msg { color: var(--muted); padding: 10px 0; min-height: 20px; }
+  .note { color: var(--muted); font-size: 12.5px; margin: 6px 0 12px; line-height: 1.6; }
+  .tablewrap { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 560px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+  th { background: var(--th); position: sticky; top: 0; font-weight: 600; z-index: 1; }
+  th:first-child, td:first-child { text-align: left; }
+  td.l, th.l { text-align: left; }
+  tr.pickrow { cursor: pointer; } tr.pickrow:hover td { background: var(--th); }
+  tr.selrow td { background: var(--th); font-weight: 600; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 18px; line-height: 1.7; }
+  @media (max-width: 860px) {
+    .app { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; position: static; border-right: 0; border-bottom: 1px solid var(--line); padding: 12px; }
+    .brand { padding-bottom: 8px; }
+    nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+    nav a { white-space: nowrap; margin: 0; }
+    .side-foot { display: none; }
+    main { padding: 14px 12px 32px; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>股票分析</h1>
-    <div class="controls">
-      <select id="stock" aria-label="股票代號">
-        {% for s in stocks %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
-      </select>
-      <select id="days" aria-label="顯示天數">
-        <option value="60">近 60 日</option>
-        <option value="120" selected>近 120 日</option>
-        <option value="250">近 250 日</option>
-      </select>
-    </div>
-  </header>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">{{ title }}</div>
+    <nav id="nav">
+      <a href="#stock" data-page="stock">個股分析</a>
+      <a href="#index" data-page="index">加權指數</a>
+      <a href="#inst" data-page="inst">個股三大法人買賣表</a>
+      <a href="#foreign" data-page="foreign">外資持股表</a>
+      <a href="#total" data-page="total">整體三大法人買賣表</a>
+    </nav>
+    <div class="side-foot">資料來源：FinMind<br>每個交易日傍晚更新<br>頁面產生：{{ built_at }}</div>
+  </aside>
 
-  <div class="cards">
-    <div class="card"><div class="k">收盤價</div><div class="v" id="close">-</div></div>
-    <div class="card"><div class="k">漲跌 / 幅度</div><div class="v" id="chg">-</div></div>
-    <div class="card"><div class="k">MA5 / MA20</div><div class="v" id="ma">-</div></div>
-    <div class="card"><div class="k">趨勢</div><div class="v" id="trend">-</div></div>
-  </div>
+  <main>
+    <!-- ① 個股分析 -->
+    <section id="page-stock" class="page">
+      <div class="head">
+        <h2>個股分析</h2>
+        <div class="controls">
+          <select id="stock-id" aria-label="股票">
+            {% for s in stocks %}<option value="{{ s.id }}">{{ s.id }}{% if s.name %} {{ s.name }}{% endif %}</option>{% endfor %}
+          </select>
+          <select id="stock-days" aria-label="天數">
+            <option value="60">近 60 日</option><option value="120" selected>近 120 日</option><option value="250">近 250 日</option>
+          </select>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="k">收盤價</div><div class="v" id="s-close">-</div></div>
+        <div class="card"><div class="k">漲跌 / 幅度</div><div class="v" id="s-chg">-</div></div>
+        <div class="card"><div class="k">MA5 / MA20</div><div class="v" id="s-ma">-</div></div>
+        <div class="card"><div class="k">均線趨勢</div><div class="v" id="s-trend">-</div></div>
+        <div class="card"><div class="k">MACD（12,26,9）</div><div class="v" id="s-macd">-</div><div class="s" id="s-macd-sub"></div></div>
+      </div>
+      <div class="msg" id="msg-stock"></div>
+      <div class="chart" id="chart-stock" style="height:800px"></div>
+      <div class="note">均線趨勢：收盤 &gt; MA5 &gt; MA20 為多頭，收盤 &lt; MA5 &lt; MA20 為空頭，其餘為盤整。MACD：DIF = EMA12 − EMA26，訊號線 = DIF 的 9 日 EMA，柱狀體 = DIF − 訊號線；柱狀體由負轉正為黃金交叉，由正轉負為死亡交叉。價格為未還原股價，除權息日均線與 MACD 會有跳動。資料日期：<span id="s-updated">-</span>。</div>
+    </section>
 
-  <div id="msg"></div>
-  <div id="chart"></div>
-  <footer>資料更新日期：<span id="updated">-</span>（每個交易日傍晚更新一次，未還原股價）{% if static %}<br>頁面產生時間：{{ built_at }}。本頁僅供檢視，資料不構成投資建議。{% endif %}</footer>
-</main>
+    <!-- ② 加權指數 -->
+    <section id="page-index" class="page">
+      <div class="head">
+        <h2>加權指數</h2>
+        <div class="controls">
+          <select id="index-days" aria-label="天數">
+            <option value="60">近 60 日</option><option value="120" selected>近 120 日</option><option value="250">近 250 日</option>
+          </select>
+        </div>
+      </div>
+      <div class="cards" id="index-cards"></div>
+      <div class="msg" id="msg-index"></div>
+      <div class="chart" id="chart-index" style="height:620px"></div>
+      <div class="chart" id="chart-index-cmp" style="height:380px"></div>
+      <div class="note" id="index-note">台指期為日盤、成交量最大的合約（通常為近月），換月日的漲跌幅會包含合約轉換的價差。美股指數的日期為美國交易日，與台股日期並不對齊。「那斯達克指數」為那斯達克綜合指數（^IXIC）。</div>
+    </section>
 
+    <!-- ③ 個股三大法人 -->
+    <section id="page-inst" class="page">
+      <div class="head">
+        <h2>個股三大法人買賣表</h2>
+        <div class="controls">
+          <select id="inst-id" aria-label="股票">
+            {% for s in stocks %}<option value="{{ s.id }}">{{ s.id }}{% if s.name %} {{ s.name }}{% endif %}</option>{% endfor %}
+          </select>
+          <select id="inst-days" aria-label="天數">
+            <option value="20" selected>近 20 日</option><option value="60">近 60 日</option><option value="120">近 120 日</option>
+          </select>
+        </div>
+      </div>
+      <div class="msg" id="msg-inst"></div>
+      <div class="chart" id="chart-inst" style="height:340px; margin-top:12px"></div>
+      <div class="tablewrap"><table id="tbl-inst"></table></div>
+      <div class="note">單位：張（1 張 = 1,000 股）。外資 = 外資及陸資 + 外資自營商；自營商 = 自行買賣 + 避險。買賣超為正（買超）以紅色、為負（賣超）以綠色顯示。</div>
+    </section>
+
+    <!-- ④ 外資持股 -->
+    <section id="page-foreign" class="page">
+      <div class="head">
+        <h2>外資持股表</h2>
+        <div class="controls">
+          <select id="foreign-days" aria-label="天數">
+            <option value="20">近 20 日</option><option value="60" selected>近 60 日</option><option value="120">近 120 日</option>
+          </select>
+        </div>
+      </div>
+      <div class="msg" id="msg-foreign"></div>
+      <div class="tablewrap" style="margin-top:12px"><table id="tbl-foreign"></table></div>
+      <div class="chart" id="chart-foreign" style="height:360px; margin-top:14px"></div>
+      <div class="note">點選表格中的股票可查看外資持股比例走勢。持股比例 = 外資及陸資持有股數 ÷ 發行股數；可投資比例 = 尚可投資的比例。增減以前一個有資料的交易日比較。</div>
+    </section>
+
+    <!-- ⑤ 整體三大法人 -->
+    <section id="page-total" class="page">
+      <div class="head">
+        <h2>整體三大法人買賣表</h2>
+        <div class="controls">
+          <select id="total-days" aria-label="天數">
+            <option value="20" selected>近 20 日</option><option value="60">近 60 日</option><option value="120">近 120 日</option>
+          </select>
+        </div>
+      </div>
+      <div class="msg" id="msg-total"></div>
+      <div class="chart" id="chart-total" style="height:340px; margin-top:12px"></div>
+      <div class="tablewrap"><table id="tbl-total"></table></div>
+      <div class="note">單位：億元（買賣金額）。外資 = 外資及陸資 + 外資自營商；自營商 = 自行買賣 + 避險。買賣超為正以紅色、為負以綠色顯示。</div>
+    </section>
+
+    <footer>本網站僅供資料檢視，不構成任何投資建議。資料可能延遲或有誤，投資請自行判斷並承擔風險。</footer>
+  </main>
+</div>
+
+{% raw %}
 <script>
 const $ = (id) => document.getElementById(id);
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const fmt = (v, d = 2) => (v === null || v === undefined) ? '-' : Number(v).toFixed(d);
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const nf = (v, d = 2) => v == null ? '-' : Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const sg = (v, d = 2) => v == null ? '-' : (v > 0 ? '+' : '') + nf(v, d);
+const cls = (v) => v > 0 ? 'up' : v < 0 ? 'down' : '';
+const span = (v, text) => `<span class="${cls(v)}">${text}</span>`;
+const PLOT_CFG = { responsive: true, displaylogo: false };
 
+const cache = {};
 async function getJson(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ('HTTP ' + r.status));
-  return r.json();
-}
-
-// 靜態網站（GitHub Pages）：資料來自預先產生的 data/{代號}.json；本機版則呼叫 API
-const STATIC = {{ 'true' if static else 'false' }};
-
-async function fetchData(id, days) {
-  if (STATIC) {
-    const d = await getJson(`data/${id}.json`);
-    return [{ stock_id: id, updated: d.updated, rows: d.rows.slice(-days) }, d.quote];
+  if (!cache[url]) {
+    cache[url] = fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`讀取 ${url} 失敗（HTTP ${r.status}）`);
+      return r.json();
+    }).catch((e) => { delete cache[url]; throw e; });
   }
-  return Promise.all([getJson(`/api/history/${id}?days=${days}`), getJson(`/api/quote/${id}`)]);
+  return cache[url];
 }
 
-async function load() {
-  const id = $('stock').value, days = Number($('days').value);
-  $('msg').textContent = '載入中…';
+function baseLayout(extra) {
+  return Object.assign({
+    autosize: true, margin: { l: 56, r: 16, t: 28, b: 40 }, hovermode: 'x unified',
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: css('--fg') },
+    legend: { orientation: 'h', y: 1.05 },
+  }, extra);
+}
+const gridColor = () => css('--line');
+const setMsg = (page, t) => { $('msg-' + page).textContent = t || ''; };
+const clearChart = (id) => { try { Plotly.purge(id); } catch (e) {} };
+
+/* ---------- ① 個股分析（含 MACD） ---------- */
+async function loadStock() {
+  const id = $('stock-id').value, days = Number($('stock-days').value);
+  setMsg('stock', '載入中…');
   try {
-    const [h, q] = await fetchData(id, days);
-    render(h, q);
-    $('msg').textContent = '';
-  } catch (e) {
-    $('msg').textContent = '無法載入資料：' + e.message;
-    Plotly.purge('chart');
-  }
+    const d = await getJson(`data/${id}.json`);
+    const rows = d.rows.slice(-days), q = d.quote, x = rows.map((r) => r.date);
+    const up = css('--up'), down = css('--down'), gc = gridColor();
+
+    $('s-close').textContent = nf(q.close);
+    $('s-chg').innerHTML = span(q.change, `${sg(q.change)} / ${sg(q.change_pct)}%`);
+    $('s-ma').textContent = `${nf(q.ma5)} / ${nf(q.ma20)}`;
+    $('s-trend').innerHTML = span(q.trend === '多頭' ? 1 : q.trend === '空頭' ? -1 : 0, q.trend);
+    const ms = q.macd_state;
+    $('s-macd').innerHTML = span(['黃金交叉', '偏多'].includes(ms) ? 1 : ['死亡交叉', '偏空'].includes(ms) ? -1 : 0, ms);
+    $('s-macd-sub').textContent = `DIF ${nf(q.macd)} ／ 訊號 ${nf(q.macd_signal)} ／ 柱 ${sg(q.macd_hist)}`;
+    $('s-updated').textContent = d.updated;
+
+    const traces = [
+      { type: 'candlestick', x, name: 'K 線', xaxis: 'x', yaxis: 'y',
+        open: rows.map((r) => r.open), high: rows.map((r) => r.high), low: rows.map((r) => r.low), close: rows.map((r) => r.close),
+        increasing: { line: { color: up }, fillcolor: up }, decreasing: { line: { color: down }, fillcolor: down } },
+      { type: 'scatter', mode: 'lines', x, y: rows.map((r) => r.ma5), name: 'MA5', yaxis: 'y', line: { color: css('--ma5'), width: 1.5 } },
+      { type: 'scatter', mode: 'lines', x, y: rows.map((r) => r.ma20), name: 'MA20', yaxis: 'y', line: { color: css('--ma20'), width: 1.5 } },
+      { type: 'bar', x, y: rows.map((r) => r.trading_volume), name: '成交量', yaxis: 'y2',
+        marker: { color: rows.map((r) => (r.spread || 0) >= 0 ? up : down) } },
+      { type: 'bar', x, y: rows.map((r) => r.macd_hist), name: 'MACD 柱', yaxis: 'y3',
+        marker: { color: rows.map((r) => (r.macd_hist || 0) >= 0 ? up : down) } },
+      { type: 'scatter', mode: 'lines', x, y: rows.map((r) => r.macd), name: 'DIF', yaxis: 'y3', line: { color: css('--ma5'), width: 1.4 } },
+      { type: 'scatter', mode: 'lines', x, y: rows.map((r) => r.macd_signal), name: '訊號線', yaxis: 'y3', line: { color: css('--ma20'), width: 1.4 } },
+    ];
+    const layout = baseLayout({
+      xaxis: { type: 'category', nticks: 10, rangeslider: { visible: false }, gridcolor: gc },
+      yaxis: { domain: [0.42, 1], gridcolor: gc, title: '價格' },
+      yaxis2: { domain: [0.28, 0.38], gridcolor: gc, title: '量' },
+      yaxis3: { domain: [0, 0.23], gridcolor: gc, title: 'MACD', zerolinecolor: css('--muted') },
+    });
+    Plotly.react('chart-stock', traces, layout, PLOT_CFG);
+    setMsg('stock', '');
+  } catch (e) { setMsg('stock', '無法載入資料：' + e.message); clearChart('chart-stock'); }
 }
 
-function render(h, q) {
-  const rows = h.rows, x = rows.map(r => r.date);
-  const up = css('--up'), down = css('--down'), fg = css('--fg'), line = css('--line');
+/* ---------- ② 加權指數 ---------- */
+let indexSel = null;
+async function loadIndex() {
+  const days = Number($('index-days').value);
+  setMsg('index', '載入中…');
+  try {
+    const { indices } = await getJson('data/indices.json');
+    if (!indexSel || !indices.find((i) => i.symbol === indexSel)) indexSel = indices[0].symbol;
 
-  const cls = q.change > 0 ? 'up' : q.change < 0 ? 'down' : '';
-  $('close').textContent = fmt(q.close);
-  $('chg').innerHTML = `<span class="${cls}">${q.change > 0 ? '+' : ''}${fmt(q.change)} / ${fmt(q.change_pct)}%</span>`;
-  $('ma').textContent = `${fmt(q.ma5)} / ${fmt(q.ma20)}`;
-  $('trend').innerHTML = `<span class="${q.trend === '多頭' ? 'up' : q.trend === '空頭' ? 'down' : ''}">${q.trend}</span>`;
-  $('updated').textContent = h.updated;
+    $('index-cards').innerHTML = indices.map((ix) => {
+      const last = ix.rows[ix.rows.length - 1];
+      if (!last) return `<div class="card pick" data-sym="${ix.symbol}"><div class="k">${ix.name}</div><div class="v">-</div><div class="s">尚無資料</div></div>`;
+      return `<div class="card pick ${ix.symbol === indexSel ? 'sel' : ''}" data-sym="${ix.symbol}">
+        <div class="k">${ix.name}</div><div class="v">${nf(last.close)}</div>
+        <div class="s">${span(last.change, `${sg(last.change)} / ${sg(last.change_pct)}%`)}　${last.date}</div></div>`;
+    }).join('');
+    document.querySelectorAll('#index-cards .pick').forEach((el) =>
+      el.addEventListener('click', () => { indexSel = el.dataset.sym; loadIndex(); }));
 
-  // 台股慣例：紅漲綠跌。x 軸用 category，自然略過週末與假日
-  const candle = { type: 'candlestick', x, name: 'K 線',
-    open: rows.map(r => r.open), high: rows.map(r => r.high), low: rows.map(r => r.low), close: rows.map(r => r.close),
-    increasing: { line: { color: up }, fillcolor: up }, decreasing: { line: { color: down }, fillcolor: down } };
-  const ma5 = { type: 'scatter', mode: 'lines', x, y: rows.map(r => r.ma5), name: 'MA5',
-    line: { color: css('--ma5'), width: 1.5 }, connectgaps: false };
-  const ma20 = { type: 'scatter', mode: 'lines', x, y: rows.map(r => r.ma20), name: 'MA20',
-    line: { color: css('--ma20'), width: 1.5 }, connectgaps: false };
-  const vol = { type: 'bar', x, y: rows.map(r => r.trading_volume), name: '成交量', yaxis: 'y2',
-    marker: { color: rows.map(r => (r.spread || 0) >= 0 ? up : down) } };
+    const ix = indices.find((i) => i.symbol === indexSel), rows = ix.rows.slice(-days);
+    if (!rows.length) { setMsg('index', `${ix.name} 尚無資料`); clearChart('chart-index'); clearChart('chart-index-cmp'); return; }
+    const x = rows.map((r) => r.date), up = css('--up'), down = css('--down'), gc = gridColor();
+    const hasVol = rows.some((r) => r.volume);
+    const traces = [
+      { type: 'candlestick', x, name: ix.name, yaxis: 'y',
+        open: rows.map((r) => r.open), high: rows.map((r) => r.high), low: rows.map((r) => r.low), close: rows.map((r) => r.close),
+        increasing: { line: { color: up }, fillcolor: up }, decreasing: { line: { color: down }, fillcolor: down } },
+    ];
+    if (hasVol) traces.push({ type: 'bar', x, y: rows.map((r) => r.volume), name: '成交量', yaxis: 'y2',
+      marker: { color: rows.map((r) => (r.change || 0) >= 0 ? up : down) } });
+    Plotly.react('chart-index', traces, baseLayout({
+      xaxis: { type: 'category', nticks: 10, rangeslider: { visible: false }, gridcolor: gc },
+      yaxis: { domain: hasVol ? [0.25, 1] : [0, 1], gridcolor: gc, title: ix.name },
+      yaxis2: { domain: [0, 0.2], gridcolor: gc, title: '量' },
+    }), PLOT_CFG);
 
-  const layout = {
-    autosize: true, margin: { l: 56, r: 16, t: 28, b: 40 },
-    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: fg },
-    xaxis: { type: 'category', nticks: 10, rangeslider: { visible: false }, gridcolor: line },
-    yaxis: { domain: [0.28, 1], gridcolor: line, title: '價格' },
-    yaxis2: { domain: [0, 0.22], gridcolor: line, title: '量' },
-    legend: { orientation: 'h', y: 1.04 }, hovermode: 'x unified',
-  };
-  Plotly.react('chart', [candle, ma5, ma20, vol], layout, { responsive: true, displaylogo: false });
+    const palette = [css('--accent'), css('--ma5'), '#9b59b6', '#16a085', '#e74c3c'];
+    const lines = indices.map((i, n) => {
+      const r = i.rows.slice(-days);
+      if (!r.length) return null;
+      const base = r[0].close;
+      return { type: 'scatter', mode: 'lines', name: i.name, connectgaps: true,
+        x: r.map((a) => a.date), y: r.map((a) => a.close / base * 100), line: { color: palette[n % palette.length], width: 1.8 } };
+    }).filter(Boolean);
+    Plotly.react('chart-index-cmp', lines, baseLayout({
+      title: { text: '走勢比較（各指數起點 = 100）', font: { size: 14 }, x: 0.02 },
+      xaxis: { type: 'date', gridcolor: gc }, yaxis: { gridcolor: gc }, margin: { l: 56, r: 16, t: 56, b: 40 },
+    }), PLOT_CFG);
+
+    const tx = indices.find((i) => i.symbol === 'TX');
+    $('index-note').textContent = '台指期為日盤、成交量最大的合約' + (tx && tx.note ? `（最新：${tx.note}）` : '') +
+      '，換月日的漲跌幅會包含合約轉換的價差。美股指數的日期為美國交易日，與台股日期並不對齊。「那斯達克指數」為那斯達克綜合指數（^IXIC）。';
+    setMsg('index', '');
+  } catch (e) { setMsg('index', '無法載入資料：' + e.message); }
 }
 
-$('stock').addEventListener('change', load);
-$('days').addEventListener('change', load);
-load();
+/* ---------- 法人買賣表（個股／整體共用） ---------- */
+const PARTY_LABEL = { foreign: '外資', trust: '投信', dealer: '自營商' };
+function partyTable(el, rows, digits) {
+  const head = `<thead><tr><th rowspan="2" class="l">日期</th>` +
+    Object.values(PARTY_LABEL).map((l) => `<th colspan="3" style="text-align:center">${l}</th>`).join('') +
+    `<th colspan="3" style="text-align:center">三大法人合計</th></tr><tr>` +
+    '<th>買進</th><th>賣出</th><th>買賣超</th>'.repeat(4) + '</tr></thead>';
+  const cell = (p) => `<td>${nf(p.buy, digits)}</td><td>${nf(p.sell, digits)}</td><td>${span(p.net, sg(p.net, digits))}</td>`;
+  const body = rows.slice().reverse().map((r) =>
+    `<tr><td>${r.date}</td>${cell(r.foreign)}${cell(r.trust)}${cell(r.dealer)}${cell(r.total)}</tr>`).join('');
+  el.innerHTML = head + `<tbody>${body}</tbody>`;
+}
+function partyChart(elId, rows, unit) {
+  const x = rows.map((r) => r.date), gc = gridColor();
+  const color = { foreign: css('--accent'), trust: css('--ma5'), dealer: '#9b59b6' };
+  const traces = Object.keys(PARTY_LABEL).map((p) => ({
+    type: 'bar', name: PARTY_LABEL[p], x, y: rows.map((r) => r[p].net), marker: { color: color[p] } }));
+  traces.push({ type: 'scatter', mode: 'lines+markers', name: '合計', x, y: rows.map((r) => r.total.net),
+    line: { color: css('--fg'), width: 1.5 }, marker: { size: 4 } });
+  Plotly.react(elId, traces, baseLayout({
+    barmode: 'group', xaxis: { type: 'category', nticks: 10, gridcolor: gc },
+    yaxis: { gridcolor: gc, title: `買賣超（${unit}）`, zerolinecolor: css('--muted') },
+  }), PLOT_CFG);
+}
+
+/* ---------- ③ 個股三大法人 ---------- */
+async function loadInst() {
+  const id = $('inst-id').value, days = Number($('inst-days').value);
+  setMsg('inst', '載入中…');
+  try {
+    const d = await getJson(`data/inst/${id}.json`);
+    const rows = d.rows.slice(-days);
+    if (!rows.length) { setMsg('inst', `${id} 尚無三大法人資料`); $('tbl-inst').innerHTML = ''; clearChart('chart-inst'); return; }
+    partyChart('chart-inst', rows, '張');
+    partyTable($('tbl-inst'), rows, 0);
+    setMsg('inst', '');
+  } catch (e) { setMsg('inst', '無法載入資料：' + e.message); }
+}
+
+/* ---------- ⑤ 整體三大法人 ---------- */
+async function loadTotal() {
+  const days = Number($('total-days').value);
+  setMsg('total', '載入中…');
+  try {
+    const d = await getJson('data/total_inst.json');
+    const rows = d.rows.slice(-days);
+    if (!rows.length) { setMsg('total', '尚無整體三大法人資料'); $('tbl-total').innerHTML = ''; clearChart('chart-total'); return; }
+    partyChart('chart-total', rows, '億元');
+    partyTable($('tbl-total'), rows, 2);
+    setMsg('total', '');
+  } catch (e) { setMsg('total', '無法載入資料：' + e.message); }
+}
+
+/* ---------- ④ 外資持股 ---------- */
+let foreignSel = null;
+async function loadForeign() {
+  const days = Number($('foreign-days').value);
+  setMsg('foreign', '載入中…');
+  try {
+    const d = await getJson('data/foreign.json');
+    if (!d.stocks.length) { setMsg('foreign', '尚無外資持股資料'); $('tbl-foreign').innerHTML = ''; clearChart('chart-foreign'); return; }
+    if (!foreignSel || !d.stocks.find((s) => s.stock_id === foreignSel)) foreignSel = d.stocks[0].stock_id;
+
+    const head = '<thead><tr><th class="l">代號</th><th class="l">名稱</th><th>資料日期</th><th>外資持股（張）</th>' +
+      '<th>持股比例 %</th><th>可投資比例 %</th><th>較前日（百分點）</th><th>較前日（張）</th><th>近 ' + days + ' 日（百分點）</th></tr></thead>';
+    const body = d.stocks.map((s) => {
+      const ser = s.series, last = ser[ser.length - 1], prev = ser[ser.length - 2];
+      const first = ser[Math.max(0, ser.length - 1 - days)];
+      const dr = prev ? last.ratio - prev.ratio : null, ds = prev ? last.shares - prev.shares : null;
+      const dn = first && first !== last ? last.ratio - first.ratio : null;
+      return `<tr class="pickrow ${s.stock_id === foreignSel ? 'selrow' : ''}" data-id="${s.stock_id}">
+        <td class="l">${s.stock_id}</td><td class="l">${s.name || ''}</td><td>${last.date}</td>
+        <td>${nf(last.shares, 0)}</td><td>${nf(last.ratio)}</td><td>${nf(last.remain_ratio)}</td>
+        <td>${span(dr, sg(dr))}</td><td>${span(ds, sg(ds, 0))}</td><td>${span(dn, sg(dn))}</td></tr>`;
+    }).join('');
+    $('tbl-foreign').innerHTML = head + `<tbody>${body}</tbody>`;
+    document.querySelectorAll('#tbl-foreign .pickrow').forEach((tr) =>
+      tr.addEventListener('click', () => { foreignSel = tr.dataset.id; loadForeign(); }));
+
+    const s = d.stocks.find((a) => a.stock_id === foreignSel), ser = s.series.slice(-days), gc = gridColor();
+    Plotly.react('chart-foreign', [
+      { type: 'scatter', mode: 'lines+markers', name: '外資持股比例 %', x: ser.map((r) => r.date), y: ser.map((r) => r.ratio),
+        line: { color: css('--accent'), width: 2 }, marker: { size: 4 } },
+    ], baseLayout({
+      title: { text: `${s.stock_id} ${s.name || ''} 外資持股比例`, font: { size: 14 }, x: 0.02 },
+      xaxis: { type: 'category', nticks: 10, gridcolor: gc }, yaxis: { gridcolor: gc, title: '%' },
+      margin: { l: 56, r: 16, t: 56, b: 40 },
+    }), PLOT_CFG);
+    setMsg('foreign', '');
+  } catch (e) { setMsg('foreign', '無法載入資料：' + e.message); }
+}
+
+/* ---------- 路由 ---------- */
+const PAGES = { stock: loadStock, index: loadIndex, inst: loadInst, foreign: loadForeign, total: loadTotal };
+function route() {
+  const p = (location.hash || '#stock').slice(1);
+  const page = PAGES[p] ? p : 'stock';
+  document.querySelectorAll('.page').forEach((el) => el.classList.toggle('active', el.id === 'page-' + page));
+  document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === page));
+  PAGES[page]();
+}
+['stock-id', 'stock-days'].forEach((i) => $(i).addEventListener('change', loadStock));
+$('index-days').addEventListener('change', loadIndex);
+['inst-id', 'inst-days'].forEach((i) => $(i).addEventListener('change', loadInst));
+$('foreign-days').addEventListener('change', loadForeign);
+$('total-days').addEventListener('change', loadTotal);
+window.addEventListener('hashchange', route);
+route();
 </script>
+{% endraw %}
 </body>
 </html>

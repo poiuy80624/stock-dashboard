@@ -1,52 +1,27 @@
-"""股票分析網頁：FastAPI，只讀 SQLite（唯讀連線），不呼叫 FinMind。"""
+"""本機網頁：啟動時用資料庫產生與 GitHub Pages 相同的靜態網站，再以 FastAPI 提供檢視。
+
+啟動：uv run uvicorn web.app:app
+資料庫路徑可用環境變數 STOCK_DB 覆寫（測試用）。重新啟動即會依最新資料重建。
+"""
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 
-import yaml
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
-from core.db import DEFAULT_DB, ROOT, get_history, open_db
-from core.view import quote_dict
+from build_site import build
+from core.db import DEFAULT_DB, ROOT
 
-app = FastAPI(title="股票分析")
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-STOCK_ID = re.compile(r"^[A-Za-z0-9]{1,10}$")
+SITE_DIR = Path(os.environ.get("STOCK_SITE_DIR", ROOT / "site"))
+DB_PATH = Path(os.environ.get("STOCK_DB", DEFAULT_DB))
 
+if not DB_PATH.exists():
+    raise RuntimeError(f"找不到資料庫：{DB_PATH}。請先執行 git pull 取得 data/stock.db，或執行 fetcher.py")
 
-def _stocks() -> list[str]:
-    with open(ROOT / "config.yaml", encoding="utf-8") as f:
-        return [str(s) for s in yaml.safe_load(f)["stocks"]]
+if not build(SITE_DIR, DB_PATH, ROOT / "config.yaml"):
+    raise RuntimeError("資料庫裡沒有任何股票資料，無法產生網頁")
 
-
-def _rows(stock_id: str, days: int) -> list[dict]:
-    if not STOCK_ID.match(stock_id):
-        raise HTTPException(400, "股票代號格式不正確，請使用代號（例如 2330）")
-    path = Path(os.environ.get("STOCK_DB", DEFAULT_DB))
-    if not path.exists():
-        raise HTTPException(503, "找不到資料庫，請先 git pull 取得 data/stock.db")
-    with open_db(path, readonly=True) as conn:
-        rows = get_history(conn, stock_id, days)
-    if not rows:
-        raise HTTPException(404, f"查無 {stock_id} 的資料")
-    return rows
-
-
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request):
-    return templates.TemplateResponse(request, "index.html", {"stocks": _stocks()})
-
-
-@app.get("/api/history/{stock_id}")
-def api_history(stock_id: str, days: int = Query(120, ge=1, le=365)):
-    rows = _rows(stock_id, days)
-    return {"stock_id": stock_id, "updated": rows[-1]["date"], "rows": rows}
-
-
-@app.get("/api/quote/{stock_id}")
-def api_quote(stock_id: str):
-    return quote_dict(stock_id, _rows(stock_id, 1)[0])
+app = FastAPI(title="AC台股分析", docs_url=None, redoc_url=None, openapi_url=None)
+app.mount("/", StaticFiles(directory=str(SITE_DIR), html=True), name="site")
