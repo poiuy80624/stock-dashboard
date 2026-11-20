@@ -5,6 +5,14 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
 
+# 對話功能的設定：若這個程序沒帶到（例如剛設定完使用者環境變數），就從使用者環境變數補上
+foreach ($n in 'ANTHROPIC_API_KEY', 'AC_CHAT_MODEL', 'AC_CHAT_EFFORT') {
+    if (-not (Test-Path "env:$n")) {
+        $v = [Environment]::GetEnvironmentVariable($n, 'User')
+        if ($v) { Set-Item "env:$n" $v }
+    }
+}
+
 $port = 8000
 $url = "http://127.0.0.1:$port"
 
