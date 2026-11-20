@@ -59,7 +59,7 @@
 
   <div id="msg"></div>
   <div id="chart"></div>
-  <footer>資料更新日期：<span id="updated">-</span>（每個交易日傍晚更新一次，未還原股價）</footer>
+  <footer>資料更新日期：<span id="updated">-</span>（每個交易日傍晚更新一次，未還原股價）{% if static %}<br>頁面產生時間：{{ built_at }}。本頁僅供檢視，資料不構成投資建議。{% endif %}</footer>
 </main>
 
 <script>
@@ -73,11 +73,22 @@ async function getJson(url) {
   return r.json();
 }
 
+// 靜態網站（GitHub Pages）：資料來自預先產生的 data/{代號}.json；本機版則呼叫 API
+const STATIC = {{ 'true' if static else 'false' }};
+
+async function fetchData(id, days) {
+  if (STATIC) {
+    const d = await getJson(`data/${id}.json`);
+    return [{ stock_id: id, updated: d.updated, rows: d.rows.slice(-days) }, d.quote];
+  }
+  return Promise.all([getJson(`/api/history/${id}?days=${days}`), getJson(`/api/quote/${id}`)]);
+}
+
 async function load() {
-  const id = $('stock').value, days = $('days').value;
+  const id = $('stock').value, days = Number($('days').value);
   $('msg').textContent = '載入中…';
   try {
-    const [h, q] = await Promise.all([getJson(`/api/history/${id}?days=${days}`), getJson(`/api/quote/${id}`)]);
+    const [h, q] = await fetchData(id, days);
     render(h, q);
     $('msg').textContent = '';
   } catch (e) {

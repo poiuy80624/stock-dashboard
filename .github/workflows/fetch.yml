@@ -57,3 +57,38 @@ jobs:
             git commit -m "chore: 更新股價資料 $(TZ=Asia/Taipei date +%F)"
             git push
           fi
+
+  # 把最新資料產生成靜態網站，發佈到 GitHub Pages（只讀、不含 token）
+  deploy:
+    needs: fetch
+    if: ${{ !cancelled() }}   # 抓資料失敗時仍以現有資料發佈，避免網站停擺
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}   # 取得 fetch job 剛 commit 的最新資料庫
+
+      - uses: astral-sh/setup-uv@v10.3.3
+
+      - name: 安裝依賴
+        run: uv sync --frozen
+
+      - name: 產生靜態網站
+        run: uv run python build_site.py --out site
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

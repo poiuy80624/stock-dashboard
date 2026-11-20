@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from core.db import DEFAULT_DB, ROOT, get_history, open_db
-from core.trend import classify_trend
+from core.view import quote_dict
 
 app = FastAPI(title="股票分析")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -49,14 +49,4 @@ def api_history(stock_id: str, days: int = Query(120, ge=1, le=365)):
 
 @app.get("/api/quote/{stock_id}")
 def api_quote(stock_id: str):
-    r = _rows(stock_id, 1)[0]
-    return {
-        "stock_id": stock_id,
-        "date": r["date"],
-        "close": r["close"],
-        "change": r["spread"],
-        "change_pct": r["change_pct"],
-        "ma5": r["ma5"],
-        "ma20": r["ma20"],
-        "trend": classify_trend(r["close"], r["ma5"], r["ma20"]),
-    }
+    return quote_dict(stock_id, _rows(stock_id, 1)[0])
