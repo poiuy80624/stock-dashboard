@@ -30,7 +30,7 @@ def test_本機網頁提供與靜態網站相同的內容(client):
     r = client.get("/")
     assert r.status_code == 200 and "AC台股分析" in r.text and "個股三大法人買賣表" in r.text
     d = client.get("/data/2330.json").json()
-    assert d["quote"]["trend"] == "多頭" and d["quote"]["macd_state"] != "資料不足"
+    assert d["rows"][-1]["trend"] == "多頭" and d["rows"][-1]["macd_state"] != "資料不足"
     assert client.get("/data/foreign.json").status_code == 200
     assert json.loads(client.get("/data/indices.json").text)["indices"][0]["symbol"] == "TX"
     assert client.get("/data/9999.json").status_code == 404

@@ -55,12 +55,18 @@ def test_產生靜態網站(tmp_path):
     assert stocks == ["2330"]                       # 沒資料的股票略過
 
     d = json.loads((out / "data" / "2330.json").read_text(encoding="utf-8"))
-    assert d["updated"] == "2026-10-28" and d["quote"]["trend"] == "多頭" and len(d["rows"]) == 45
-    assert d["quote"]["macd"] is not None and d["quote"]["macd_state"] in ("偏多", "黃金交叉")
+    assert d["updated"] == "2026-10-28" and len(d["rows"]) == 45        # 輸出全部歷史，由前端依日期區間篩選
+    assert "quote" not in d
+    first, last = d["rows"][0], d["rows"][-1]
+    assert first["trend"] == "資料不足" and first["macd_state"] == "資料不足"
+    assert last["trend"] == "多頭" and last["macd"] is not None and last["macd_state"] in ("偏多", "黃金交叉")
 
     html = (out / "index.html").read_text(encoding="utf-8")
     assert "<title>AC台股分析</title>" in html and "個股分析" in html and "整體三大法人買賣表" in html
     assert '<option value="2330">2330 台積電</option>' in html and "9999" not in html
+    # 日期選擇器的可選範圍 = 價格資料的第一天與最後一天
+    assert 'data-min="2026-09-14"' in html and 'data-max="2026-10-28"' in html
+    assert 'id="r-start"' in html and 'id="r-end"' in html and 'data-p="all"' in html
     assert (out / ".nojekyll").exists()
 
     inst = json.loads((out / "data" / "inst" / "2330.json").read_text(encoding="utf-8"))

@@ -31,8 +31,18 @@
   h2 { font-size: 18px; margin: 0; }
   .head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
   .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  select { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
-           background: var(--card); color: var(--fg); }
+  select, input[type=date], .presets button {
+    font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--fg); }
+  input[type=date] { color-scheme: light dark; }
+  .rangebar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; padding: 10px 12px;
+              background: var(--card); border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
+  .rangebar .lbl { color: var(--muted); }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .presets button { cursor: pointer; padding: 5px 11px; font-size: 13.5px; }
+  .presets button:hover { border-color: var(--accent); }
+  .presets button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .rangebar .dates { display: flex; gap: 6px; align-items: center; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
   .card .k { font-size: 12px; color: var(--muted); }
@@ -57,7 +67,8 @@
     .app { flex-direction: column; }
     .sidebar { width: 100%; height: auto; position: static; border-right: 0; border-bottom: 1px solid var(--line); padding: 12px; }
     .brand { padding-bottom: 8px; }
-    nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+    nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+    nav::-webkit-scrollbar { display: none; }
     nav a { white-space: nowrap; margin: 0; }
     .side-foot { display: none; }
     main { padding: 14px 12px 32px; }
@@ -79,6 +90,21 @@
   </aside>
 
   <main>
+    <!-- 全站共用的期間選擇：快速區間 + 自訂起訖日期 -->
+    <div class="rangebar" id="rangebar" data-min="{{ min_date }}" data-max="{{ max_date }}">
+      <span class="lbl">期間</span>
+      <div class="presets" id="presets">
+        <button data-p="30">1 個月</button><button data-p="90">3 個月</button><button data-p="180">6 個月</button>
+        <button data-p="365">1 年</button><button data-p="1095">3 年</button><button data-p="all">全部</button>
+      </div>
+      <div class="dates">
+        <input type="date" id="r-start" min="{{ min_date }}" max="{{ max_date }}" aria-label="起始日期">
+        <span>至</span>
+        <input type="date" id="r-end" min="{{ min_date }}" max="{{ max_date }}" aria-label="結束日期">
+      </div>
+      <span class="lbl" id="r-info"></span>
+    </div>
+
     <!-- ① 個股分析 -->
     <section id="page-stock" class="page">
       <div class="head">
@@ -87,13 +113,10 @@
           <select id="stock-id" aria-label="股票">
             {% for s in stocks %}<option value="{{ s.id }}">{{ s.id }}{% if s.name %} {{ s.name }}{% endif %}</option>{% endfor %}
           </select>
-          <select id="stock-days" aria-label="天數">
-            <option value="60">近 60 日</option><option value="120" selected>近 120 日</option><option value="250">近 250 日</option>
-          </select>
         </div>
       </div>
       <div class="cards">
-        <div class="card"><div class="k">收盤價</div><div class="v" id="s-close">-</div></div>
+        <div class="card"><div class="k">收盤價</div><div class="v" id="s-close">-</div><div class="s" id="s-date"></div></div>
         <div class="card"><div class="k">漲跌 / 幅度</div><div class="v" id="s-chg">-</div></div>
         <div class="card"><div class="k">MA5 / MA20</div><div class="v" id="s-ma">-</div></div>
         <div class="card"><div class="k">均線趨勢</div><div class="v" id="s-trend">-</div></div>
@@ -101,24 +124,17 @@
       </div>
       <div class="msg" id="msg-stock"></div>
       <div class="chart" id="chart-stock" style="height:800px"></div>
-      <div class="note">均線趨勢：收盤 &gt; MA5 &gt; MA20 為多頭，收盤 &lt; MA5 &lt; MA20 為空頭，其餘為盤整。MACD：DIF = EMA12 − EMA26，訊號線 = DIF 的 9 日 EMA，柱狀體 = DIF − 訊號線；柱狀體由負轉正為黃金交叉，由正轉負為死亡交叉。價格為未還原股價，除權息日均線與 MACD 會有跳動。資料日期：<span id="s-updated">-</span>。</div>
+      <div class="note">上方卡片顯示所選期間「最後一個交易日」的數值。均線趨勢：收盤 &gt; MA5 &gt; MA20 為多頭，收盤 &lt; MA5 &lt; MA20 為空頭，其餘為盤整。MACD：DIF = EMA12 − EMA26，訊號線 = DIF 的 9 日 EMA，柱狀體 = DIF − 訊號線；柱狀體由負轉正為黃金交叉，由正轉負為死亡交叉。均線與 MACD 一律以完整歷史計算，不受所選期間影響。價格為未還原股價，除權息日均線與 MACD 會有跳動。</div>
     </section>
 
     <!-- ② 加權指數 -->
     <section id="page-index" class="page">
-      <div class="head">
-        <h2>加權指數</h2>
-        <div class="controls">
-          <select id="index-days" aria-label="天數">
-            <option value="60">近 60 日</option><option value="120" selected>近 120 日</option><option value="250">近 250 日</option>
-          </select>
-        </div>
-      </div>
+      <div class="head"><h2>加權指數</h2></div>
       <div class="cards" id="index-cards"></div>
       <div class="msg" id="msg-index"></div>
       <div class="chart" id="chart-index" style="height:620px"></div>
       <div class="chart" id="chart-index-cmp" style="height:380px"></div>
-      <div class="note" id="index-note">台指期為日盤、成交量最大的合約（通常為近月），換月日的漲跌幅會包含合約轉換的價差。美股指數的日期為美國交易日，與台股日期並不對齊。「那斯達克指數」為那斯達克綜合指數（^IXIC）。</div>
+      <div class="note" id="index-note">台指期為日盤、成交量最大的合約（通常為近月），換月日的漲跌幅會包含合約轉換的價差。美股指數的日期為美國交易日，與台股日期並不對齊。「那斯達克指數」為那斯達克綜合指數（^IXIC）。卡片顯示所選期間最後一個有資料的交易日。</div>
     </section>
 
     <!-- ③ 個股三大法人 -->
@@ -129,47 +145,30 @@
           <select id="inst-id" aria-label="股票">
             {% for s in stocks %}<option value="{{ s.id }}">{{ s.id }}{% if s.name %} {{ s.name }}{% endif %}</option>{% endfor %}
           </select>
-          <select id="inst-days" aria-label="天數">
-            <option value="20" selected>近 20 日</option><option value="60">近 60 日</option><option value="120">近 120 日</option>
-          </select>
         </div>
       </div>
       <div class="msg" id="msg-inst"></div>
       <div class="chart" id="chart-inst" style="height:340px; margin-top:12px"></div>
       <div class="tablewrap"><table id="tbl-inst"></table></div>
-      <div class="note">單位：張（1 張 = 1,000 股）。外資 = 外資及陸資 + 外資自營商；自營商 = 自行買賣 + 避險。買賣超為正（買超）以紅色、為負（賣超）以綠色顯示。</div>
+      <div class="note">單位：張（1 張 = 1,000 股）。外資 = 外資及陸資 + 外資自營商；自營商 = 自行買賣 + 避險。買賣超為正（買超）以紅色、為負（賣超）以綠色顯示。表格由新到舊排列。</div>
     </section>
 
     <!-- ④ 外資持股 -->
     <section id="page-foreign" class="page">
-      <div class="head">
-        <h2>外資持股表</h2>
-        <div class="controls">
-          <select id="foreign-days" aria-label="天數">
-            <option value="20">近 20 日</option><option value="60" selected>近 60 日</option><option value="120">近 120 日</option>
-          </select>
-        </div>
-      </div>
+      <div class="head"><h2>外資持股表</h2></div>
       <div class="msg" id="msg-foreign"></div>
       <div class="tablewrap" style="margin-top:12px"><table id="tbl-foreign"></table></div>
       <div class="chart" id="chart-foreign" style="height:360px; margin-top:14px"></div>
-      <div class="note">點選表格中的股票可查看外資持股比例走勢。持股比例 = 外資及陸資持有股數 ÷ 發行股數；可投資比例 = 尚可投資的比例。增減以前一個有資料的交易日比較。</div>
+      <div class="note">表格顯示所選期間「最後一個交易日」的持股，並與期間內前一個交易日、期間第一個交易日比較。點選表格中的股票可查看外資持股比例走勢。持股比例 = 外資及陸資持有股數 ÷ 發行股數；可投資比例 = 尚可投資的比例。</div>
     </section>
 
     <!-- ⑤ 整體三大法人 -->
     <section id="page-total" class="page">
-      <div class="head">
-        <h2>整體三大法人買賣表</h2>
-        <div class="controls">
-          <select id="total-days" aria-label="天數">
-            <option value="20" selected>近 20 日</option><option value="60">近 60 日</option><option value="120">近 120 日</option>
-          </select>
-        </div>
-      </div>
+      <div class="head"><h2>整體三大法人買賣表</h2></div>
       <div class="msg" id="msg-total"></div>
       <div class="chart" id="chart-total" style="height:340px; margin-top:12px"></div>
       <div class="tablewrap"><table id="tbl-total"></table></div>
-      <div class="note">單位：億元（買賣金額）。外資 = 外資及陸資 + 外資自營商；自營商 = 自行買賣 + 避險。買賣超為正以紅色、為負以綠色顯示。</div>
+      <div class="note">單位：億元（買賣金額）。外資 = 外資及陸資 + 外資自營商；自營商 = 自行買賣 + 避險。買賣超為正以紅色、為負以綠色顯示。表格由新到舊排列。</div>
     </section>
 
     <footer>本網站僅供資料檢視，不構成任何投資建議。資料可能延遲或有誤，投資請自行判斷並承擔風險。</footer>
@@ -208,23 +207,64 @@ const gridColor = () => css('--line');
 const setMsg = (page, t) => { $('msg-' + page).textContent = t || ''; };
 const clearChart = (id) => { try { Plotly.purge(id); } catch (e) {} };
 
+/* ---------- 全站共用的期間 ---------- */
+const MIN = $('rangebar').dataset.min, MAX = $('rangebar').dataset.max;
+function addDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+let range = { start: MIN, end: MAX, p: 'all' };
+function presetRange(p) {
+  if (p === 'all') return { start: MIN, end: MAX, p };
+  const start = addDays(MAX, -Number(p));
+  return { start: start < MIN ? MIN : start, end: MAX, p };
+}
+const inRange = (rows) => rows.filter((r) => r.date >= range.start && r.date <= range.end);
+const EMPTY_RANGE = '所選期間內沒有資料，請調整日期。';
+
+function syncRangeUI() {
+  $('r-start').value = range.start;
+  $('r-end').value = range.end;
+  document.querySelectorAll('#presets button').forEach((b) => b.classList.toggle('on', b.dataset.p === String(range.p)));
+  $('r-info').textContent = `資料範圍：${MIN} ~ ${MAX}`;
+}
+function applyRange(next) {
+  range = next;
+  syncRangeUI();
+  route();
+}
+document.querySelectorAll('#presets button').forEach((b) =>
+  b.addEventListener('click', () => applyRange(presetRange(b.dataset.p))));
+function onDateChange(changed) {
+  let s = $('r-start').value || MIN, e = $('r-end').value || MAX;
+  if (s > e) {                                      // 起訖顛倒時，以剛改的那格為準，另一格跟著調整
+    if (changed === 'start') e = s; else s = e;
+  }
+  applyRange({ start: s, end: e, p: 'custom' });
+}
+$('r-start').addEventListener('change', () => onDateChange('start'));
+$('r-end').addEventListener('change', () => onDateChange('end'));
+
 /* ---------- ① 個股分析（含 MACD） ---------- */
 async function loadStock() {
-  const id = $('stock-id').value, days = Number($('stock-days').value);
+  const id = $('stock-id').value;
   setMsg('stock', '載入中…');
   try {
     const d = await getJson(`data/${id}.json`);
-    const rows = d.rows.slice(-days), q = d.quote, x = rows.map((r) => r.date);
+    const rows = inRange(d.rows);
+    if (!rows.length) { setMsg('stock', EMPTY_RANGE); clearChart('chart-stock'); return; }
+    const x = rows.map((r) => r.date), last = rows[rows.length - 1];
     const up = css('--up'), down = css('--down'), gc = gridColor();
 
-    $('s-close').textContent = nf(q.close);
-    $('s-chg').innerHTML = span(q.change, `${sg(q.change)} / ${sg(q.change_pct)}%`);
-    $('s-ma').textContent = `${nf(q.ma5)} / ${nf(q.ma20)}`;
-    $('s-trend').innerHTML = span(q.trend === '多頭' ? 1 : q.trend === '空頭' ? -1 : 0, q.trend);
-    const ms = q.macd_state;
+    $('s-close').textContent = nf(last.close);
+    $('s-date').textContent = last.date;
+    $('s-chg').innerHTML = span(last.spread, `${sg(last.spread)} / ${sg(last.change_pct)}%`);
+    $('s-ma').textContent = `${nf(last.ma5)} / ${nf(last.ma20)}`;
+    $('s-trend').innerHTML = span(last.trend === '多頭' ? 1 : last.trend === '空頭' ? -1 : 0, last.trend);
+    const ms = last.macd_state;
     $('s-macd').innerHTML = span(['黃金交叉', '偏多'].includes(ms) ? 1 : ['死亡交叉', '偏空'].includes(ms) ? -1 : 0, ms);
-    $('s-macd-sub').textContent = `DIF ${nf(q.macd)} ／ 訊號 ${nf(q.macd_signal)} ／ 柱 ${sg(q.macd_hist)}`;
-    $('s-updated').textContent = d.updated;
+    $('s-macd-sub').textContent = `DIF ${nf(last.macd)} ／ 訊號 ${nf(last.macd_signal)} ／ 柱 ${sg(last.macd_hist)}`;
 
     const traces = [
       { type: 'candlestick', x, name: 'K 線', xaxis: 'x', yaxis: 'y',
@@ -246,22 +286,22 @@ async function loadStock() {
       yaxis3: { domain: [0, 0.23], gridcolor: gc, title: 'MACD', zerolinecolor: css('--muted') },
     });
     Plotly.react('chart-stock', traces, layout, PLOT_CFG);
-    setMsg('stock', '');
+    setMsg('stock', `期間內共 ${rows.length} 個交易日（${rows[0].date} ~ ${last.date}）`);
   } catch (e) { setMsg('stock', '無法載入資料：' + e.message); clearChart('chart-stock'); }
 }
 
 /* ---------- ② 加權指數 ---------- */
 let indexSel = null;
 async function loadIndex() {
-  const days = Number($('index-days').value);
   setMsg('index', '載入中…');
   try {
     const { indices } = await getJson('data/indices.json');
     if (!indexSel || !indices.find((i) => i.symbol === indexSel)) indexSel = indices[0].symbol;
+    const ranged = indices.map((ix) => ({ ...ix, rows: inRange(ix.rows) }));
 
-    $('index-cards').innerHTML = indices.map((ix) => {
+    $('index-cards').innerHTML = ranged.map((ix) => {
       const last = ix.rows[ix.rows.length - 1];
-      if (!last) return `<div class="card pick" data-sym="${ix.symbol}"><div class="k">${ix.name}</div><div class="v">-</div><div class="s">尚無資料</div></div>`;
+      if (!last) return `<div class="card pick ${ix.symbol === indexSel ? 'sel' : ''}" data-sym="${ix.symbol}"><div class="k">${ix.name}</div><div class="v">-</div><div class="s">期間內無資料</div></div>`;
       return `<div class="card pick ${ix.symbol === indexSel ? 'sel' : ''}" data-sym="${ix.symbol}">
         <div class="k">${ix.name}</div><div class="v">${nf(last.close)}</div>
         <div class="s">${span(last.change, `${sg(last.change)} / ${sg(last.change_pct)}%`)}　${last.date}</div></div>`;
@@ -269,40 +309,41 @@ async function loadIndex() {
     document.querySelectorAll('#index-cards .pick').forEach((el) =>
       el.addEventListener('click', () => { indexSel = el.dataset.sym; loadIndex(); }));
 
-    const ix = indices.find((i) => i.symbol === indexSel), rows = ix.rows.slice(-days);
-    if (!rows.length) { setMsg('index', `${ix.name} 尚無資料`); clearChart('chart-index'); clearChart('chart-index-cmp'); return; }
-    const x = rows.map((r) => r.date), up = css('--up'), down = css('--down'), gc = gridColor();
-    const hasVol = rows.some((r) => r.volume);
-    const traces = [
-      { type: 'candlestick', x, name: ix.name, yaxis: 'y',
-        open: rows.map((r) => r.open), high: rows.map((r) => r.high), low: rows.map((r) => r.low), close: rows.map((r) => r.close),
-        increasing: { line: { color: up }, fillcolor: up }, decreasing: { line: { color: down }, fillcolor: down } },
-    ];
-    if (hasVol) traces.push({ type: 'bar', x, y: rows.map((r) => r.volume), name: '成交量', yaxis: 'y2',
-      marker: { color: rows.map((r) => (r.change || 0) >= 0 ? up : down) } });
-    Plotly.react('chart-index', traces, baseLayout({
-      xaxis: { type: 'category', nticks: 10, rangeslider: { visible: false }, gridcolor: gc },
-      yaxis: { domain: hasVol ? [0.25, 1] : [0, 1], gridcolor: gc, title: ix.name },
-      yaxis2: { domain: [0, 0.2], gridcolor: gc, title: '量' },
-    }), PLOT_CFG);
+    const ix = ranged.find((i) => i.symbol === indexSel), rows = ix.rows;
+    if (!rows.length) { setMsg('index', `${ix.name} 在所選期間內沒有資料`); clearChart('chart-index'); }
+    else {
+      const x = rows.map((r) => r.date), up = css('--up'), down = css('--down'), gc = gridColor();
+      const hasVol = rows.some((r) => r.volume);
+      const traces = [
+        { type: 'candlestick', x, name: ix.name, yaxis: 'y',
+          open: rows.map((r) => r.open), high: rows.map((r) => r.high), low: rows.map((r) => r.low), close: rows.map((r) => r.close),
+          increasing: { line: { color: up }, fillcolor: up }, decreasing: { line: { color: down }, fillcolor: down } },
+      ];
+      if (hasVol) traces.push({ type: 'bar', x, y: rows.map((r) => r.volume), name: '成交量', yaxis: 'y2',
+        marker: { color: rows.map((r) => (r.change || 0) >= 0 ? up : down) } });
+      Plotly.react('chart-index', traces, baseLayout({
+        xaxis: { type: 'category', nticks: 10, rangeslider: { visible: false }, gridcolor: gc },
+        yaxis: { domain: hasVol ? [0.25, 1] : [0, 1], gridcolor: gc, title: ix.name },
+        yaxis2: { domain: [0, 0.2], gridcolor: gc, title: '量' },
+      }), PLOT_CFG);
+      setMsg('index', '');
+    }
 
-    const palette = [css('--accent'), css('--ma5'), '#9b59b6', '#16a085', '#e74c3c'];
-    const lines = indices.map((i, n) => {
-      const r = i.rows.slice(-days);
-      if (!r.length) return null;
-      const base = r[0].close;
+    const gc = gridColor(), palette = [css('--accent'), css('--ma5'), '#9b59b6', '#16a085', '#e74c3c'];
+    const lines = ranged.map((i, n) => {
+      if (!i.rows.length) return null;
+      const base = i.rows[0].close;
       return { type: 'scatter', mode: 'lines', name: i.name, connectgaps: true,
-        x: r.map((a) => a.date), y: r.map((a) => a.close / base * 100), line: { color: palette[n % palette.length], width: 1.8 } };
+        x: i.rows.map((a) => a.date), y: i.rows.map((a) => a.close / base * 100), line: { color: palette[n % palette.length], width: 1.8 } };
     }).filter(Boolean);
     Plotly.react('chart-index-cmp', lines, baseLayout({
-      title: { text: '走勢比較（各指數起點 = 100）', font: { size: 14 }, x: 0.02 },
+      title: { text: '走勢比較（各指數於所選期間起點 = 100）', font: { size: 14 }, x: 0.02 },
       xaxis: { type: 'date', gridcolor: gc }, yaxis: { gridcolor: gc }, margin: { l: 56, r: 16, t: 56, b: 40 },
     }), PLOT_CFG);
 
     const tx = indices.find((i) => i.symbol === 'TX');
     $('index-note').textContent = '台指期為日盤、成交量最大的合約' + (tx && tx.note ? `（最新：${tx.note}）` : '') +
-      '，換月日的漲跌幅會包含合約轉換的價差。美股指數的日期為美國交易日，與台股日期並不對齊。「那斯達克指數」為那斯達克綜合指數（^IXIC）。';
-    setMsg('index', '');
+      '，換月日的漲跌幅會包含合約轉換的價差。美股指數的日期為美國交易日，與台股日期並不對齊。「那斯達克指數」為那斯達克綜合指數（^IXIC）。卡片顯示所選期間最後一個有資料的交易日。';
   } catch (e) { setMsg('index', '無法載入資料：' + e.message); }
 }
 
@@ -333,65 +374,63 @@ function partyChart(elId, rows, unit) {
 
 /* ---------- ③ 個股三大法人 ---------- */
 async function loadInst() {
-  const id = $('inst-id').value, days = Number($('inst-days').value);
+  const id = $('inst-id').value;
   setMsg('inst', '載入中…');
   try {
     const d = await getJson(`data/inst/${id}.json`);
-    const rows = d.rows.slice(-days);
-    if (!rows.length) { setMsg('inst', `${id} 尚無三大法人資料`); $('tbl-inst').innerHTML = ''; clearChart('chart-inst'); return; }
+    const rows = inRange(d.rows);
+    if (!rows.length) { setMsg('inst', `${id} 在所選期間內沒有三大法人資料`); $('tbl-inst').innerHTML = ''; clearChart('chart-inst'); return; }
     partyChart('chart-inst', rows, '張');
     partyTable($('tbl-inst'), rows, 0);
-    setMsg('inst', '');
+    setMsg('inst', `期間內共 ${rows.length} 個交易日`);
   } catch (e) { setMsg('inst', '無法載入資料：' + e.message); }
 }
 
 /* ---------- ⑤ 整體三大法人 ---------- */
 async function loadTotal() {
-  const days = Number($('total-days').value);
   setMsg('total', '載入中…');
   try {
     const d = await getJson('data/total_inst.json');
-    const rows = d.rows.slice(-days);
-    if (!rows.length) { setMsg('total', '尚無整體三大法人資料'); $('tbl-total').innerHTML = ''; clearChart('chart-total'); return; }
+    const rows = inRange(d.rows);
+    if (!rows.length) { setMsg('total', '所選期間內沒有整體三大法人資料'); $('tbl-total').innerHTML = ''; clearChart('chart-total'); return; }
     partyChart('chart-total', rows, '億元');
     partyTable($('tbl-total'), rows, 2);
-    setMsg('total', '');
+    setMsg('total', `期間內共 ${rows.length} 個交易日`);
   } catch (e) { setMsg('total', '無法載入資料：' + e.message); }
 }
 
 /* ---------- ④ 外資持股 ---------- */
 let foreignSel = null;
 async function loadForeign() {
-  const days = Number($('foreign-days').value);
   setMsg('foreign', '載入中…');
   try {
     const d = await getJson('data/foreign.json');
-    if (!d.stocks.length) { setMsg('foreign', '尚無外資持股資料'); $('tbl-foreign').innerHTML = ''; clearChart('chart-foreign'); return; }
-    if (!foreignSel || !d.stocks.find((s) => s.stock_id === foreignSel)) foreignSel = d.stocks[0].stock_id;
+    const stocks = d.stocks.map((s) => ({ ...s, series: inRange(s.series) })).filter((s) => s.series.length);
+    if (!stocks.length) { setMsg('foreign', '所選期間內沒有外資持股資料'); $('tbl-foreign').innerHTML = ''; clearChart('chart-foreign'); return; }
+    if (!foreignSel || !stocks.find((s) => s.stock_id === foreignSel)) foreignSel = stocks[0].stock_id;
 
     const head = '<thead><tr><th class="l">代號</th><th class="l">名稱</th><th>資料日期</th><th>外資持股（張）</th>' +
-      '<th>持股比例 %</th><th>可投資比例 %</th><th>較前日（百分點）</th><th>較前日（張）</th><th>近 ' + days + ' 日（百分點）</th></tr></thead>';
-    const body = d.stocks.map((s) => {
-      const ser = s.series, last = ser[ser.length - 1], prev = ser[ser.length - 2];
-      const first = ser[Math.max(0, ser.length - 1 - days)];
+      '<th>持股比例 %</th><th>可投資比例 %</th><th>較前日（百分點）</th><th>較前日（張）</th><th>期間變動（百分點）</th><th>期間變動（張）</th></tr></thead>';
+    const body = stocks.map((s) => {
+      const ser = s.series, last = ser[ser.length - 1], prev = ser[ser.length - 2], first = ser[0];
       const dr = prev ? last.ratio - prev.ratio : null, ds = prev ? last.shares - prev.shares : null;
-      const dn = first && first !== last ? last.ratio - first.ratio : null;
+      const pr = ser.length > 1 ? last.ratio - first.ratio : null, ps = ser.length > 1 ? last.shares - first.shares : null;
       return `<tr class="pickrow ${s.stock_id === foreignSel ? 'selrow' : ''}" data-id="${s.stock_id}">
         <td class="l">${s.stock_id}</td><td class="l">${s.name || ''}</td><td>${last.date}</td>
         <td>${nf(last.shares, 0)}</td><td>${nf(last.ratio)}</td><td>${nf(last.remain_ratio)}</td>
-        <td>${span(dr, sg(dr))}</td><td>${span(ds, sg(ds, 0))}</td><td>${span(dn, sg(dn))}</td></tr>`;
+        <td>${span(dr, sg(dr))}</td><td>${span(ds, sg(ds, 0))}</td><td>${span(pr, sg(pr))}</td><td>${span(ps, sg(ps, 0))}</td></tr>`;
     }).join('');
     $('tbl-foreign').innerHTML = head + `<tbody>${body}</tbody>`;
     document.querySelectorAll('#tbl-foreign .pickrow').forEach((tr) =>
       tr.addEventListener('click', () => { foreignSel = tr.dataset.id; loadForeign(); }));
 
-    const s = d.stocks.find((a) => a.stock_id === foreignSel), ser = s.series.slice(-days), gc = gridColor();
+    const s = stocks.find((a) => a.stock_id === foreignSel), ser = s.series, gc = gridColor();
     Plotly.react('chart-foreign', [
-      { type: 'scatter', mode: 'lines+markers', name: '外資持股比例 %', x: ser.map((r) => r.date), y: ser.map((r) => r.ratio),
-        line: { color: css('--accent'), width: 2 }, marker: { size: 4 } },
+      { type: 'scatter', mode: ser.length > 120 ? 'lines' : 'lines+markers', name: '外資持股比例 %',
+        x: ser.map((r) => r.date), y: ser.map((r) => r.ratio), line: { color: css('--accent'), width: 2 }, marker: { size: 4 } },
     ], baseLayout({
       title: { text: `${s.stock_id} ${s.name || ''} 外資持股比例`, font: { size: 14 }, x: 0.02 },
-      xaxis: { type: 'category', nticks: 10, gridcolor: gc }, yaxis: { gridcolor: gc, title: '%' },
+      xaxis: { type: 'date', gridcolor: gc }, yaxis: { gridcolor: gc, title: '%' },
       margin: { l: 56, r: 16, t: 56, b: 40 },
     }), PLOT_CFG);
     setMsg('foreign', '');
@@ -407,12 +446,11 @@ function route() {
   document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === page));
   PAGES[page]();
 }
-['stock-id', 'stock-days'].forEach((i) => $(i).addEventListener('change', loadStock));
-$('index-days').addEventListener('change', loadIndex);
-['inst-id', 'inst-days'].forEach((i) => $(i).addEventListener('change', loadInst));
-$('foreign-days').addEventListener('change', loadForeign);
-$('total-days').addEventListener('change', loadTotal);
+$('stock-id').addEventListener('change', loadStock);
+$('inst-id').addEventListener('change', loadInst);
 window.addEventListener('hashchange', route);
+range = presetRange(180);          // 預設顯示近 6 個月
+syncRangeUI();
 route();
 </script>
 {% endraw %}

@@ -28,11 +28,10 @@ from core.db import (
     get_total_institutional, open_db,
 )
 from core.extras import INDEX_SPECS, group_parties
-from core.view import quote_dict
+from core.view import with_states
 
 log = logging.getLogger("build_site")
-KEEP_DAYS = 250      # 個股與指數頁最長可選 250 日
-INST_DAYS = 120      # 法人買賣表保留 120 個交易日
+ALL = 100_000        # 輸出資料庫內全部歷史，由前端依使用者選的日期區間篩選
 SITE_TITLE = "AC台股分析"
 
 
@@ -67,21 +66,23 @@ def build(out_dir: Path, db_path: Path, config_path: Path) -> list[str]:
 
     stocks: list[dict] = []
     foreign_stocks: list[dict] = []
+    first_dates: list[str] = []
+    last_dates: list[str] = []
     with open_db(db_path, readonly=True) as conn:
         for sid in wanted:
-            rows = get_history(conn, sid, KEEP_DAYS)
+            rows = get_history(conn, sid, ALL)
             if not rows:
                 log.warning("%s 沒有價格資料，略過", sid)
                 continue
-            prev = rows[-2] if len(rows) > 1 else None
+            first_dates.append(rows[0]["date"])
+            last_dates.append(rows[-1]["date"])
             _dump(out_dir / "data" / f"{sid}.json", {
                 "stock_id": sid,
                 "updated": rows[-1]["date"],
-                "quote": quote_dict(sid, rows[-1], prev),
-                "rows": rows,
+                "rows": with_states(rows),
             })
 
-            fh = get_foreign_holding(conn, sid, INST_DAYS)
+            fh = get_foreign_holding(conn, sid, ALL)
             name = next((r["stock_name"] for r in reversed(fh) if r.get("stock_name")), "")
             stocks.append({"id": sid, "name": name})
             if fh:
@@ -104,14 +105,14 @@ def build(out_dir: Path, db_path: Path, config_path: Path) -> list[str]:
             _dump(out_dir / "data" / "inst" / f"{sid}.json", {
                 "stock_id": sid,
                 "unit": "張",
-                "rows": group_parties(get_institutional(conn, sid, INST_DAYS), divisor=1000),
+                "rows": group_parties(get_institutional(conn, sid, ALL), divisor=1000),
             })
 
         _dump(out_dir / "data" / "foreign.json", {"unit": "張", "stocks": foreign_stocks})
 
         indices = []
         for spec in INDEX_SPECS:
-            series = get_index_series(conn, spec["symbol"], KEEP_DAYS)
+            series = get_index_series(conn, spec["symbol"], ALL)
             indices.append({
                 "symbol": spec["symbol"],
                 "name": spec["name"],
@@ -122,7 +123,7 @@ def build(out_dir: Path, db_path: Path, config_path: Path) -> list[str]:
 
         _dump(out_dir / "data" / "total_inst.json", {
             "unit": "億元",
-            "rows": group_parties(get_total_institutional(conn, INST_DAYS), divisor=1e8),
+            "rows": group_parties(get_total_institutional(conn, ALL), divisor=1e8),
         })
 
     env = Environment(
@@ -132,6 +133,8 @@ def build(out_dir: Path, db_path: Path, config_path: Path) -> list[str]:
     html = env.get_template("index.html").render(
         title=SITE_TITLE,
         stocks=stocks,
+        min_date=min(first_dates) if first_dates else "",     # 日期選擇器可選範圍
+        max_date=max(last_dates) if last_dates else "",
         built_at=datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M（台北時間）"),
     )
     (out_dir / "index.html").write_text(html, encoding="utf-8")

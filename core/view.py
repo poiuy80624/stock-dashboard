@@ -4,20 +4,17 @@ from __future__ import annotations
 from core.trend import classify_macd, classify_trend
 
 
-def quote_dict(stock_id: str, row: dict, prev_row: dict | None = None) -> dict:
-    """由 get_history 的一列資料（及前一列）組成最新報價，含趨勢與 MACD 判斷。"""
-    prev_hist = prev_row.get("macd_hist") if prev_row else None
-    return {
-        "stock_id": stock_id,
-        "date": row["date"],
-        "close": row["close"],
-        "change": row["spread"],
-        "change_pct": row["change_pct"],
-        "ma5": row["ma5"],
-        "ma20": row["ma20"],
-        "trend": classify_trend(row["close"], row["ma5"], row["ma20"]),
-        "macd": row.get("macd"),
-        "macd_signal": row.get("macd_signal"),
-        "macd_hist": row.get("macd_hist"),
-        "macd_state": classify_macd(row.get("macd_hist"), prev_hist),
-    }
+def with_states(rows: list[dict]) -> list[dict]:
+    """為每一列加上均線趨勢（trend）與 MACD 狀態（macd_state）。
+
+    前端依使用者選的日期區間取最後一列顯示，所以每一列都要有判斷結果；
+    判斷規則只在 core/trend.py 實作一份。rows 需為日期升冪、含 get_history 的欄位。
+    """
+    out, prev = [], None
+    for r in rows:
+        item = dict(r)
+        item["trend"] = classify_trend(r["close"], r["ma5"], r["ma20"])
+        item["macd_state"] = classify_macd(r.get("macd_hist"), prev.get("macd_hist") if prev else None)
+        out.append(item)
+        prev = r
+    return out
