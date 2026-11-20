@@ -212,12 +212,15 @@ def run(
         s for s in stocks
         if s not in permanent and (last_date(conn, s) or "") < today.isoformat()
     ]
+    incomplete = False
     if missing and today.weekday() < 5 and now.time() >= market_close and trading_today is not False:
         msg = f"截止時仍未取得 {today} 當日資料：{','.join(missing)}（下次執行會自動補齊）"
         log.warning(msg)
         log_fetch(conn, None, "missing", msg, now)
+        # 已確認是交易日、且有等待過卻仍缺資料 → 視為失敗，讓排程（GitHub Actions）發出失敗通知
+        incomplete = wait and trading_today is True
     conn.commit()
-    return 1 if (permanent or transient or aborted) else 0
+    return 1 if (permanent or transient or aborted or incomplete) else 0
 
 
 def setup_logging() -> None:

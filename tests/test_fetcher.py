@@ -63,7 +63,7 @@ def test_超過_19點停止重試並記錄(tmp_path):
         upsert_prices(conn, [_row("2330", "2026-11-19")])
         code = run(CFG, conn, fetch_fn=lambda *a: [], trading_day_fn=lambda d: True,
                    now_fn=clk.now, sleep_fn=clk.sleep)
-        assert code == 0
+        assert code == 1                            # 確認是交易日卻缺資料 → 視為失敗以觸發通知
         assert clk.sleeps == 6                      # 17:30 → 19:00 共 6 次等待
         assert clk.t.hour == 19 and clk.t.minute == 0   # 不會超過 19:00
         status = [r["status"] for r in conn.execute("SELECT status FROM fetch_log")]
@@ -93,13 +93,13 @@ def test_非交易日與週末不等待(tmp_path):
         assert clk2.sleeps == 0
 
 
-def test_no_wait_只抓一次(tmp_path):
+def test_no_wait_只抓一次且缺資料不算失敗(tmp_path):
     clk = _clock(17, 30)
     with open_db(tmp_path / "t.db") as conn:
         upsert_prices(conn, [_row("2330", "2026-11-19")])
-        run(CFG, conn, wait=False, fetch_fn=lambda *a: [], trading_day_fn=lambda d: True,
-            now_fn=clk.now, sleep_fn=clk.sleep)
-        assert clk.sleeps == 0
+        code = run(CFG, conn, wait=False, fetch_fn=lambda *a: [], trading_day_fn=lambda d: True,
+                   now_fn=clk.now, sleep_fn=clk.sleep)
+        assert clk.sleeps == 0 and code == 0
 
 
 def test_單檔失敗不影響其他檔且寫入_log(tmp_path):
