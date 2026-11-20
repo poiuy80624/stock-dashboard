@@ -236,7 +236,9 @@ def make_client(tmp_path, monkeypatch, db):
 def test_api_串流事件與狀態(make_client):
     fake = FakeClient([_resp([_tool_use("list_stocks", {})], "tool_use"), _resp([_text("好的")])])
     c = make_client(fake)
-    assert c.get("/api/chat/status").json() == {"configured": True, "model": "claude-sonnet-5-5"}
+    st = c.get("/api/chat/status").json()
+    assert st["configured"] is True and st["model"] == "claude-sonnet-5-5"
+    assert [m["id"] for m in st["models"]] == ["claude-sonnet-5-5", "claude-opus-5-5"] and all(m["label"] and m["hint"] for m in st["models"])
     r = c.post("/api/chat", json={"messages": [{"role": "user", "content": "有哪些股票？"}]})
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
     events = [json.loads(line) for line in r.text.strip().split("\n")]
@@ -255,6 +257,22 @@ def test_api_安全檢查(make_client):
     assert nokey.get("/api/chat/status").json()["configured"] is False
     r = nokey.post("/api/chat", json=body)
     assert r.status_code == 503 and "ANTHROPIC_API_KEY" in r.json()["detail"]
+
+
+def test_api_模型切換與白名單(make_client, monkeypatch):
+    fake = FakeClient([_resp([_text("a")]), _resp([_text("b")]), _resp([_text("c")])])
+    c = make_client(fake)
+    msg = [{"role": "user", "content": "hi"}]
+    c.post("/api/chat", json={"messages": msg})                                         # 省略 → 預設
+    c.post("/api/chat", json={"messages": msg, "model": "claude-opus-5-5"})              # 畫面選了 Opus
+    c.post("/api/chat", json={"messages": msg, "model": None})
+    assert [k["model"] for k in fake.calls] == ["claude-sonnet-5-5", "claude-opus-5-5", "claude-sonnet-5-5"]
+    r = c.post("/api/chat", json={"messages": msg, "model": "claude-not-allowed"})      # 不在白名單 → 拒絕，且不會呼叫 API
+    assert r.status_code == 400 and "不支援" in r.json()["detail"] and len(fake.calls) == 3
+    # 用環境變數指定清單外的模型時，會成為預設並出現在可選清單
+    monkeypatch.setenv("AC_CHAT_MODEL", "claude-custom-x")
+    st = c.get("/api/chat/status").json()
+    assert st["model"] == "claude-custom-x" and st["models"][-1]["id"] == "claude-custom-x"
 
 
 def test_api_只送最近的訊息(make_client):

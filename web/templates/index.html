@@ -203,7 +203,14 @@
     {% if chat_enabled %}
     <!-- ⑥ AI 對話分析（僅本機版） -->
     <section id="page-chat" class="page">
-      <div class="head"><h2>AI 對話分析</h2><span class="note" id="chat-status" style="margin:0"></span></div>
+      <div class="head">
+        <h2>AI 對話分析</h2>
+        <div class="controls">
+          <span class="note" style="margin:0">模型</span>
+          <div class="presets" id="chat-models"></div>
+        </div>
+      </div>
+      <div class="note" id="chat-status" style="margin:6px 0 0"></div>
       <div class="setup" id="chat-setup" hidden>
         尚未設定 API 金鑰。請在專案資料夾的 <code>.env</code> 檔新增一行
         <code>ANTHROPIC_API_KEY=你的金鑰</code>（金鑰請到 Anthropic Console 申請，與 Claude 訂閱分開計費），存檔後關閉並重新啟動網頁即可。
@@ -517,6 +524,10 @@ window.addEventListener('hashchange', route);
   const log = $('chat-log'), input = $('chat-input'), sendBtn = $('chat-send');
   const history = [];
   let busy = false, configured = false;
+  let models = [], currentModel = null;
+  const MODEL_KEY = 'ac_chat_model';                       // 只是記住你上次選的模型（瀏覽器本機的小設定）
+  const savedModel = () => { try { return localStorage.getItem(MODEL_KEY); } catch (e) { return null; } };
+  const saveModel = (id) => { try { localStorage.setItem(MODEL_KEY, id); } catch (e) {} };
 
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const inline = (s) => s.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -575,7 +586,7 @@ window.addEventListener('hashchange', route);
     let answer = '';
     try {
       const resp = await fetch('/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history, model: currentModel }),
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
@@ -611,13 +622,29 @@ window.addEventListener('hashchange', route);
     }
   }
 
+  function renderModels() {
+    $('chat-models').innerHTML = models.map((m) =>
+      `<button type="button" data-id="${esc(m.id)}" class="${m.id === currentModel ? 'on' : ''}" title="${esc(m.hint)}">${esc(m.label)}</button>`).join('');
+    const cur = models.find((m) => m.id === currentModel);
+    $('chat-status').textContent = configured && cur ? `目前模型：${cur.label}（${cur.hint}）。切換後從下一題開始生效。` : '';
+  }
+  $('chat-models').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    currentModel = b.dataset.id; saveModel(currentModel); renderModels();
+  });
+
   async function refreshStatus() {
     try {
       const s = await (await fetch('/api/chat/status')).json();
       configured = !!s.configured;
+      models = s.models || [];
+      // 優先用你上次選的模型；若已不在清單內就用伺服器預設
+      const prefer = savedModel();
+      currentModel = models.some((m) => m.id === prefer) ? prefer : (currentModel && models.some((m) => m.id === currentModel) ? currentModel : s.model);
       $('chat-setup').hidden = configured;
       input.disabled = sendBtn.disabled = !configured;
-      $('chat-status').textContent = configured ? `模型：${s.model}` : '';
+      renderModels();
     } catch (e) { $('chat-status').textContent = '無法連線到本機伺服器'; }
   }
 
