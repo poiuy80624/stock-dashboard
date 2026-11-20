@@ -241,7 +241,7 @@ class Toolbox:
         with self._conn() as conn:
             allv = get_valuation(conn, sid)
             if not allv:
-                raise ToolInputError(f"{sid} 沒有本益比資料（可能尚未回補）")
+                raise ToolInputError(f"{sid} 沒有本益比資料（ETF 沒有本益比，或資料尚未回補）")
             start, end = self._range(conn, args, 180)
             rows = [v for v in allv if start <= v["date"] <= end] or allv[-1:]
             pers = [v["per"] for v in allv if v["per"] and v["per"] > 0]
@@ -263,7 +263,7 @@ class Toolbox:
         with self._conn() as conn:
             rows = get_month_revenue(conn, sid)
         if not rows:
-            raise ToolInputError(f"{sid} 沒有月營收資料（可能尚未回補）")
+            raise ToolInputError(f"{sid} 沒有月營收資料（ETF 沒有月營收，或資料尚未回補）")
         by_ym = {(r["revenue_year"], r["revenue_month"]): r["revenue"] for r in rows}
         out = []
         for r in rows[-months:]:
