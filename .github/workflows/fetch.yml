@@ -90,5 +90,9 @@ jobs:
         with:
           path: site
 
+      # 剛上傳完產物就立刻發佈，偶爾會因 GitHub 端的時間差而「找不到 github-pages 產物」，先等一下
+      - name: 等待產物就緒
+        run: sleep 20
+
       - id: deployment
         uses: actions/deploy-pages@v5
