@@ -1,6 +1,6 @@
 """本機網頁：啟動時用資料庫產生與 GitHub Pages 相同的靜態網站，再以 FastAPI 提供檢視。
 
-和公開網站的差別：本機版多一個「AI 對話分析」分頁（/api/chat），由本機伺服器用你的 ANTHROPIC_API_KEY
+和公開網站的差別：本機版多一個「AI技術分析」分頁（/api/chat），由本機伺服器用你的 ANTHROPIC_API_KEY
 呼叫 Claude；金鑰只在伺服器端，不會傳到瀏覽器，也不會出現在公開網站。
 
 啟動：uv run uvicorn web.app:app

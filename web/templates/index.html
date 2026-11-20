@@ -113,7 +113,7 @@
       <a href="#inst" data-page="inst">個股三大法人買賣表</a>
       <a href="#foreign" data-page="foreign">外資持股表</a>
       <a href="#total" data-page="total">整體三大法人買賣表</a>
-      {% if chat_enabled %}<a href="#chat" data-page="chat">AI 對話分析</a>{% endif %}
+      {% if chat_enabled %}<a href="#chat" data-page="chat">AI技術分析</a>{% endif %}
     </nav>
     <div class="side-foot">資料來源：FinMind<br>每個交易日傍晚更新<br>頁面產生：{{ built_at }}</div>
   </aside>
@@ -201,10 +201,10 @@
     </section>
 
     {% if chat_enabled %}
-    <!-- ⑥ AI 對話分析（僅本機版） -->
+    <!-- ⑥ AI技術分析（僅本機版） -->
     <section id="page-chat" class="page">
       <div class="head">
-        <h2>AI 對話分析</h2>
+        <h2>AI技術分析</h2>
         <div class="controls">
           <span class="note" style="margin:0">模型</span>
           <div class="presets" id="chat-models"></div>
@@ -519,7 +519,7 @@ window.addEventListener('hashchange', route);
 {% if chat_enabled %}
 {% raw %}
 <script>
-/* ---------- ⑥ AI 對話分析（僅本機版） ---------- */
+/* ---------- ⑥ AI技術分析（僅本機版） ---------- */
 (function () {
   const log = $('chat-log'), input = $('chat-input'), sendBtn = $('chat-send');
   const history = [];
