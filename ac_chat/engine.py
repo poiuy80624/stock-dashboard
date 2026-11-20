@@ -1,6 +1,6 @@
 """對話引擎：以 Claude 的工具呼叫（手動迴圈）查詢本機資料庫，再用繁體中文分析。
 
-- 預設模型 claude-opus-5-5，可用環境變數 AC_CHAT_MODEL 改成 claude-sonnet-5-5 等較省錢的模型。
+- 預設模型 claude-sonnet-5-5（較省錢），可用環境變數 AC_CHAT_MODEL 改成 claude-opus-5-5 等其他模型。
 - 只使用 tools.py 的唯讀查詢工具；不上網、沒有新聞，所以系統提示要求不得編造事件。
 - 金鑰只從環境變數 ANTHROPIC_API_KEY 讀取（本機放 .env），絕不進 repo。
 """
@@ -16,7 +16,7 @@ from ac_chat.tools import TOOL_LABELS, TOOL_SCHEMAS, Toolbox
 
 log = logging.getLogger("ac_chat")
 
-DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_MODEL = "claude-sonnet-5-5"
 MAX_ITERATIONS = 8          # 單次提問最多往返幾輪工具呼叫
 MAX_TOKENS = 16000          # 非串流請求的建議上限，避免 HTTP 逾時
 

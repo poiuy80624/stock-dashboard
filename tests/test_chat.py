@@ -163,10 +163,10 @@ def test_引擎_工具往返後產生最終回答(tb):
     events = list(engine.run_chat(fake, [{"role": "user", "content": "2330 趨勢？"}], tb))
     assert [e["type"] for e in events] == ["tool", "text", "done"]
     assert events[0]["label"] == "查詢 2330 目前整體狀況" and events[1]["text"] == "結論：偏多。"
-    assert events[2]["usage"] == {"input_tokens": 400, "output_tokens": 70} and events[2]["model"] == "claude-opus-5-5"
+    assert events[2]["usage"] == {"input_tokens": 400, "output_tokens": 70} and events[2]["model"] == "claude-sonnet-5-5"
 
     first, second = fake.calls
-    assert first["model"] == "claude-opus-5-5" and first["output_config"] == {"effort": "medium"}
+    assert first["model"] == "claude-sonnet-5-5" and first["output_config"] == {"effort": "medium"}
     assert len(first["tools"]) == len(TOOL_SCHEMAS)
     assert "絕對不要編造" in first["system"] and "非投資建議" in first["system"] and "未還原股價" in first["system"]
     assert LAST.isoformat() in first["system"] and "2330、2317" in first["system"]
@@ -189,11 +189,11 @@ def test_引擎_工具錯誤會標記_is_error_並讓模型自行修正(tb):
 
 
 def test_引擎_可用環境變數換模型與強度(tb, monkeypatch):
-    monkeypatch.setenv("AC_CHAT_MODEL", "claude-sonnet-5-5")
+    monkeypatch.setenv("AC_CHAT_MODEL", "claude-opus-5-5")
     monkeypatch.setenv("AC_CHAT_EFFORT", "high")
     fake = FakeClient([_resp([_text("ok")])])
     list(engine.run_chat(fake, [{"role": "user", "content": "hi"}], tb))
-    assert fake.calls[0]["model"] == "claude-sonnet-5-5" and fake.calls[0]["output_config"] == {"effort": "high"}
+    assert fake.calls[0]["model"] == "claude-opus-5-5" and fake.calls[0]["output_config"] == {"effort": "high"}
 
 
 @pytest.mark.parametrize("cls,status,keyword", [
@@ -236,7 +236,7 @@ def make_client(tmp_path, monkeypatch, db):
 def test_api_串流事件與狀態(make_client):
     fake = FakeClient([_resp([_tool_use("list_stocks", {})], "tool_use"), _resp([_text("好的")])])
     c = make_client(fake)
-    assert c.get("/api/chat/status").json() == {"configured": True, "model": "claude-opus-5-5"}
+    assert c.get("/api/chat/status").json() == {"configured": True, "model": "claude-sonnet-5-5"}
     r = c.post("/api/chat", json={"messages": [{"role": "user", "content": "有哪些股票？"}]})
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
     events = [json.loads(line) for line in r.text.strip().split("\n")]
