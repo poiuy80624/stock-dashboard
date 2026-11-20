@@ -1,0 +1,59 @@
+name: 更新股價資料
+
+on:
+  schedule:
+    # GitHub 的 cron 是 UTC；09:30 UTC = 台北 17:30，週一至週五
+    - cron: "30 9 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "回補近 N 天（留空 = 只補缺漏）"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+# 同一時間只允許一個執行，避免兩次執行互相覆蓋 stock.db
+concurrency:
+  group: fetch-stock-data
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120   # fetcher 最多重試到 19:00
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: 安裝依賴
+        run: uv sync --frozen
+
+      - name: 執行單元測試
+        run: uv run pytest -q
+
+      - name: 抓取資料
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          BACKFILL: ${{ inputs.backfill }}
+        run: |
+          if [ -n "$BACKFILL" ]; then
+            uv run python fetcher.py --backfill "$BACKFILL"
+          else
+            uv run python fetcher.py
+          fi
+
+      - name: 提交資料庫
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/stock.db
+          if git diff --cached --quiet; then
+            echo "資料庫無變更，不提交"
+          else
+            git commit -m "chore: 更新股價資料 $(TZ=Asia/Taipei date +%F)"
+            git push
+          fi

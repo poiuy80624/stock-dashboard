@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "stock_mcp": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "C:\\Users\\User\\Documents\\stock-dashboard",
+        "python",
+        "stock_mcp/server.py"
+      ],
+      "env": {}
+    }
+  }
+}

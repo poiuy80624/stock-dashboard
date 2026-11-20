@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>股票分析</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<style>
+  :root {
+    --bg: #fafaf8; --fg: #1d1d1b; --muted: #6b6b66; --card: #fff; --line: #e3e3dd;
+    --up: #d63a3a; --down: #1f9d62; --ma5: #e08a00; --ma20: #3b6fd4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --fg: #ececE8; --muted: #9a9a93; --card: #1f1f1d; --line: #33332f;
+            --up: #ff6b6b; --down: #3ecf8e; --ma5: #ffb341; --ma20: #6fa0ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  h1 { font-size: 20px; margin: 0; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  select { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+           background: var(--card); color: var(--fg); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .card .k { font-size: 12px; color: var(--muted); }
+  .card .v { font-size: 22px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  #chart { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px; height: 680px; }
+  @media (max-width: 600px) { #chart { height: 520px; } }
+  #msg { color: var(--muted); padding: 12px 0; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>股票分析</h1>
+    <div class="controls">
+      <select id="stock" aria-label="股票代號">
+        {% for s in stocks %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+      <select id="days" aria-label="顯示天數">
+        <option value="60">近 60 日</option>
+        <option value="120" selected>近 120 日</option>
+        <option value="250">近 250 日</option>
+      </select>
+    </div>
+  </header>
+
+  <div class="cards">
+    <div class="card"><div class="k">收盤價</div><div class="v" id="close">-</div></div>
+    <div class="card"><div class="k">漲跌 / 幅度</div><div class="v" id="chg">-</div></div>
+    <div class="card"><div class="k">MA5 / MA20</div><div class="v" id="ma">-</div></div>
+    <div class="card"><div class="k">趨勢</div><div class="v" id="trend">-</div></div>
+  </div>
+
+  <div id="msg"></div>
+  <div id="chart"></div>
+  <footer>資料更新日期：<span id="updated">-</span>（每個交易日傍晚更新一次，未還原股價）</footer>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const fmt = (v, d = 2) => (v === null || v === undefined) ? '-' : Number(v).toFixed(d);
+
+async function getJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ('HTTP ' + r.status));
+  return r.json();
+}
+
+async function load() {
+  const id = $('stock').value, days = $('days').value;
+  $('msg').textContent = '載入中…';
+  try {
+    const [h, q] = await Promise.all([getJson(`/api/history/${id}?days=${days}`), getJson(`/api/quote/${id}`)]);
+    render(h, q);
+    $('msg').textContent = '';
+  } catch (e) {
+    $('msg').textContent = '無法載入資料：' + e.message;
+    Plotly.purge('chart');
+  }
+}
+
+function render(h, q) {
+  const rows = h.rows, x = rows.map(r => r.date);
+  const up = css('--up'), down = css('--down'), fg = css('--fg'), line = css('--line');
+
+  const cls = q.change > 0 ? 'up' : q.change < 0 ? 'down' : '';
+  $('close').textContent = fmt(q.close);
+  $('chg').innerHTML = `<span class="${cls}">${q.change > 0 ? '+' : ''}${fmt(q.change)} / ${fmt(q.change_pct)}%</span>`;
+  $('ma').textContent = `${fmt(q.ma5)} / ${fmt(q.ma20)}`;
+  $('trend').innerHTML = `<span class="${q.trend === '多頭' ? 'up' : q.trend === '空頭' ? 'down' : ''}">${q.trend}</span>`;
+  $('updated').textContent = h.updated;
+
+  // 台股慣例：紅漲綠跌。x 軸用 category，自然略過週末與假日
+  const candle = { type: 'candlestick', x, name: 'K 線',
+    open: rows.map(r => r.open), high: rows.map(r => r.high), low: rows.map(r => r.low), close: rows.map(r => r.close),
+    increasing: { line: { color: up }, fillcolor: up }, decreasing: { line: { color: down }, fillcolor: down } };
+  const ma5 = { type: 'scatter', mode: 'lines', x, y: rows.map(r => r.ma5), name: 'MA5',
+    line: { color: css('--ma5'), width: 1.5 }, connectgaps: false };
+  const ma20 = { type: 'scatter', mode: 'lines', x, y: rows.map(r => r.ma20), name: 'MA20',
+    line: { color: css('--ma20'), width: 1.5 }, connectgaps: false };
+  const vol = { type: 'bar', x, y: rows.map(r => r.trading_volume), name: '成交量', yaxis: 'y2',
+    marker: { color: rows.map(r => (r.spread || 0) >= 0 ? up : down) } };
+
+  const layout = {
+    autosize: true, margin: { l: 56, r: 16, t: 28, b: 40 },
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: fg },
+    xaxis: { type: 'category', nticks: 10, rangeslider: { visible: false }, gridcolor: line },
+    yaxis: { domain: [0.28, 1], gridcolor: line, title: '價格' },
+    yaxis2: { domain: [0, 0.22], gridcolor: line, title: '量' },
+    legend: { orientation: 'h', y: 1.04 }, hovermode: 'x unified',
+  };
+  Plotly.react('chart', [candle, ma5, ma20, vol], layout, { responsive: true, displaylogo: false });
+}
+
+$('stock').addEventListener('change', load);
+$('days').addEventListener('change', load);
+load();
+</script>
+</body>
+</html>

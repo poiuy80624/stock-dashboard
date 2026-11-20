@@ -1,0 +1,10 @@
+.env
+logs/
+__pycache__/
+.venv/
+.pytest_cache/
+*.pyc
+# 注意：data/stock.db 需要進 git（由 GitHub Actions 更新後 commit）
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
