@@ -68,8 +68,15 @@ def test_產生靜態網站(tmp_path):
     assert 'data-min="2026-09-14"' in html and 'data-max="2026-10-28"' in html
     assert 'id="r-start"' in html and 'id="r-end"' in html and 'data-p="all"' in html
     assert (out / ".nojekyll").exists()
+    # 公開網站是純靜態頁面，不含對話分頁與 /api/chat 呼叫（金鑰不可能放在公開網頁）
+    assert "page-chat" not in html and "AI 對話分析" not in html and "/api/chat" not in html
 
-    inst = json.loads((out / "data" / "inst" / "2330.json").read_text(encoding="utf-8"))
+    local = tmp_path / "site_local"
+    build(local, db, _cfg(tmp_path, ["2330"]), chat_enabled=True)
+    local_html = (local / "index.html").read_text(encoding="utf-8")
+    assert 'id="page-chat"' in local_html and 'data-page="chat"' in local_html and "/api/chat" in local_html
+
+    inst =json.loads((out / "data" / "inst" / "2330.json").read_text(encoding="utf-8"))
     day = inst["rows"][0]                            # 2026-10-27，單位換算成張
     assert day["date"] == "2026-10-27" and day["foreign"]["net"] == 3000.0 and day["trust"]["net"] == -300.0
     assert day["total"]["net"] == 2700.0

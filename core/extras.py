@@ -72,6 +72,19 @@ def normalize_foreign(rows: list[dict]) -> list[tuple]:
     ]
 
 
+def normalize_revenue(rows: list[dict]) -> list[tuple]:
+    """→ (stock_id, date, revenue, revenue_month, revenue_year)"""
+    return [
+        (str(r["stock_id"]), r["date"], r.get("revenue"), r.get("revenue_month"), r.get("revenue_year"))
+        for r in rows
+    ]
+
+
+def normalize_valuation(rows: list[dict]) -> list[tuple]:
+    """→ (stock_id, date, dividend_yield, per, pbr)"""
+    return [(str(r["stock_id"]), r["date"], r.get("dividend_yield"), r.get("PER"), r.get("PBR")) for r in rows]
+
+
 def normalize_total(rows: list[dict]) -> list[tuple]:
     """→ (date, name, buy, sell)"""
     return [(r["date"], r["name"], int(r.get("buy") or 0), int(r.get("sell") or 0)) for r in rows]

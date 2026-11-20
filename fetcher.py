@@ -27,10 +27,12 @@ from functools import partial
 
 from core.db import (
     ROOT, last_date, last_date_in, log_fetch, open_db, upsert_foreign_holding, upsert_index_prices,
-    upsert_institutional, upsert_prices, upsert_total_institutional,
+    upsert_institutional, upsert_month_revenue, upsert_prices, upsert_total_institutional,
+    upsert_valuation,
 )
 from core.extras import (
-    INDEX_SPECS, normalize_foreign, normalize_index, normalize_institutional, normalize_total,
+    INDEX_SPECS, normalize_foreign, normalize_index, normalize_institutional, normalize_revenue,
+    normalize_total, normalize_valuation,
 )
 from core.indicators import update_indicators
 
@@ -254,6 +256,10 @@ def run_extras(
                       {"data_id": sid}, normalize_institutional, upsert_institutional))
         tasks.append((f"外資持股 {sid}", "foreign_holding", sid, "TaiwanStockShareholding",
                       {"data_id": sid}, normalize_foreign, upsert_foreign_holding))
+        tasks.append((f"本益比 {sid}", "valuation", sid, "TaiwanStockPER",
+                      {"data_id": sid}, normalize_valuation, upsert_valuation))
+        tasks.append((f"月營收 {sid}", "month_revenue", sid, "TaiwanStockMonthRevenue",
+                      {"data_id": sid}, normalize_revenue, upsert_month_revenue))
     tasks.append(("整體三大法人", "total_institutional", None, "TaiwanStockTotalInstitutionalInvestors",
                   {}, normalize_total, upsert_total_institutional))
     for spec in INDEX_SPECS:

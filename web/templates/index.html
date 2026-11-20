@@ -63,6 +63,34 @@
   tr.pickrow { cursor: pointer; } tr.pickrow:hover td { background: var(--th); }
   tr.selrow td { background: var(--th); font-weight: 600; }
   footer { color: var(--muted); font-size: 12px; margin-top: 18px; line-height: 1.7; }
+  .is-chat #rangebar { display: none; }
+  .chatlog { display: flex; flex-direction: column; gap: 14px; min-height: 260px; max-height: 62vh; overflow-y: auto; padding: 14px;
+             background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin: 12px 0; }
+  .chatlog .empty { color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-radius: 12px; padding: 8px 12px; max-width: 85%; line-height: 1.6; }
+  .msg.assistant { align-self: stretch; line-height: 1.75; font-size: 14.5px; }
+  .msg .toollog { font-size: 12px; color: var(--muted); margin-bottom: 6px; line-height: 1.6; }
+  .msg .usage { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  .msg .body h4 { margin: 12px 0 4px; font-size: 15px; }
+  .msg .body p { margin: 6px 0; }
+  .msg .body ul, .msg .body ol { margin: 6px 0; padding-left: 22px; }
+  .msg .body code { background: var(--th); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .msg .body .mdtable { overflow-x: auto; margin: 8px 0; }
+  .msg .body table { width: auto; min-width: 50%; }
+  .msg .body th { position: static; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .chips button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 16px; border: 1px solid var(--line);
+                  background: var(--card); color: var(--fg); cursor: pointer; }
+  .chips button:hover { border-color: var(--accent); }
+  .chatform { display: flex; gap: 8px; align-items: flex-end; }
+  .chatform textarea { flex: 1; font: inherit; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line);
+                       background: var(--card); color: var(--fg); resize: vertical; min-height: 44px; max-height: 180px; }
+  .chatform button { font: inherit; padding: 10px 20px; border-radius: 10px; border: 0; background: var(--accent); color: #fff;
+                     cursor: pointer; font-weight: 600; }
+  .chatform button:disabled, .chatform textarea:disabled { opacity: .5; cursor: not-allowed; }
+  .setup { background: var(--card); border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin: 12px 0;
+           font-size: 14px; line-height: 1.8; }
+  .setup code { background: var(--th); padding: 1px 6px; border-radius: 4px; }
   @media (max-width: 860px) {
     .app { flex-direction: column; }
     .sidebar { width: 100%; height: auto; position: static; border-right: 0; border-bottom: 1px solid var(--line); padding: 12px; }
@@ -85,6 +113,7 @@
       <a href="#inst" data-page="inst">個股三大法人買賣表</a>
       <a href="#foreign" data-page="foreign">外資持股表</a>
       <a href="#total" data-page="total">整體三大法人買賣表</a>
+      {% if chat_enabled %}<a href="#chat" data-page="chat">AI 對話分析</a>{% endif %}
     </nav>
     <div class="side-foot">資料來源：FinMind<br>每個交易日傍晚更新<br>頁面產生：{{ built_at }}</div>
   </aside>
@@ -170,6 +199,33 @@
       <div class="tablewrap"><table id="tbl-total"></table></div>
       <div class="note">單位：億元（買賣金額）。外資 = 外資及陸資 + 外資自營商；自營商 = 自行買賣 + 避險。買賣超為正以紅色、為負以綠色顯示。表格由新到舊排列。</div>
     </section>
+
+    {% if chat_enabled %}
+    <!-- ⑥ AI 對話分析（僅本機版） -->
+    <section id="page-chat" class="page">
+      <div class="head"><h2>AI 對話分析</h2><span class="note" id="chat-status" style="margin:0"></span></div>
+      <div class="setup" id="chat-setup" hidden>
+        尚未設定 API 金鑰。請在專案資料夾的 <code>.env</code> 檔新增一行
+        <code>ANTHROPIC_API_KEY=你的金鑰</code>（金鑰請到 Anthropic Console 申請，與 Claude 訂閱分開計費），存檔後關閉並重新啟動網頁即可。
+      </div>
+      <div class="chatlog" id="chat-log">
+        <div class="empty">你可以問個股的趨勢、MACD、三大法人與外資動向、估值與月營收，也可以請我比較股票或對照大盤與美股。<br>
+          我只根據本站資料庫的數字分析，沒有新聞與公告；資料看不出原因時，我會直接說明。</div>
+      </div>
+      <div class="chips" id="chat-chips">
+        <button type="button">2330 最近趨勢如何？為什麼會這樣？</button>
+        <button type="button">目前哪幾檔的 MACD 出現黃金交叉或死亡交叉？</button>
+        <button type="button">外資最近一個月在買還是賣？哪幾檔最明顯？</button>
+        <button type="button">比較 2330 和 3017 近三個月的表現與籌碼</button>
+        <button type="button">費城半導體和那斯達克最近的走勢，對台股有什麼對照？</button>
+      </div>
+      <form class="chatform" id="chat-form">
+        <textarea id="chat-input" rows="2" maxlength="2000" placeholder="輸入問題，Enter 送出、Shift+Enter 換行。例如：2330 這週為什麼下跌？"></textarea>
+        <button type="submit" id="chat-send">送出</button>
+      </form>
+      <div class="note">AI 的回答由模型根據上述資料產生，可能有誤；不提供買賣建議，也不構成投資建議。每次提問會呼叫 Anthropic API 並計費，用量顯示在回答下方。</div>
+    </section>
+    {% endif %}
 
     <footer>本網站僅供資料檢視，不構成任何投資建議。資料可能延遲或有誤，投資請自行判斷並承擔風險。</footer>
   </main>
@@ -444,15 +500,143 @@ function route() {
   const page = PAGES[p] ? p : 'stock';
   document.querySelectorAll('.page').forEach((el) => el.classList.toggle('active', el.id === 'page-' + page));
   document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === page));
+  document.body.classList.toggle('is-chat', page === 'chat');      // 對話頁不需要期間列
   PAGES[page]();
 }
 $('stock-id').addEventListener('change', loadStock);
 $('inst-id').addEventListener('change', loadInst);
 window.addEventListener('hashchange', route);
+</script>
+{% endraw %}
+
+{% if chat_enabled %}
+{% raw %}
+<script>
+/* ---------- ⑥ AI 對話分析（僅本機版） ---------- */
+(function () {
+  const log = $('chat-log'), input = $('chat-input'), sendBtn = $('chat-send');
+  const history = [];
+  let busy = false, configured = false;
+
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = (s) => s.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  const cells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+
+  // 極簡 Markdown（先跳脫 HTML 再轉換，避免把模型輸出當成程式碼執行）
+  function md(src) {
+    const lines = esc(src).split('\n');
+    let out = '', list = null, i = 0;
+    const closeList = () => { if (list) { out += `</${list}>`; list = null; } };
+    while (i < lines.length) {
+      const line = lines[i];
+      if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1])) {
+        closeList();
+        const head = cells(line); i += 2;
+        let rows = '';
+        while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows += '<tr>' + cells(lines[i]).map((c) => `<td>${inline(c)}</td>`).join('') + '</tr>'; i++; }
+        out += `<div class="mdtable"><table><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+        continue;
+      }
+      let m;
+      if ((m = line.match(/^#{1,4}\s+(.*)/))) { closeList(); out += `<h4>${inline(m[1])}</h4>`; }
+      else if ((m = line.match(/^\s*[-*•]\s+(.*)/))) { if (list !== 'ul') { closeList(); out += '<ul>'; list = 'ul'; } out += `<li>${inline(m[1])}</li>`; }
+      else if ((m = line.match(/^\s*\d+[.)]\s+(.*)/))) { if (list !== 'ol') { closeList(); out += '<ol>'; list = 'ol'; } out += `<li>${inline(m[1])}</li>`; }
+      else if (line.trim() === '') { closeList(); }
+      else { closeList(); out += `<p>${inline(line)}</p>`; }
+      i++;
+    }
+    closeList();
+    return out;
+  }
+
+  const scrollDown = () => { log.scrollTop = log.scrollHeight; };
+  function addUser(text) {
+    const el = document.createElement('div');
+    el.className = 'msg user';
+    el.innerHTML = esc(text).replace(/\n/g, '<br>');
+    log.appendChild(el); scrollDown();
+  }
+  function addAssistant() {
+    const el = document.createElement('div');
+    el.className = 'msg assistant';
+    el.innerHTML = '<div class="toollog"></div><div class="body"><span class="note">分析中…</span></div><div class="usage"></div>';
+    log.appendChild(el); scrollDown();
+    return { tools: el.querySelector('.toollog'), body: el.querySelector('.body'), usage: el.querySelector('.usage') };
+  }
+
+  async function send(text) {
+    text = (text || '').trim();
+    if (!text || busy || !configured) return;
+    busy = true; sendBtn.disabled = true; input.value = '';
+    const empty = log.querySelector('.empty'); if (empty) empty.remove();
+    history.push({ role: 'user', content: text });
+    addUser(text);
+    const a = addAssistant();
+    let answer = '';
+    try {
+      const resp = await fetch('/api/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+      const reader = resp.body.getReader(), dec = new TextDecoder();
+      let buf = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+          if (!line) continue;
+          const ev = JSON.parse(line);
+          if (ev.type === 'tool') { a.tools.insertAdjacentHTML('beforeend', `• ${esc(ev.label)}<br>`); }
+          else if (ev.type === 'text') { answer = ev.text; a.body.innerHTML = md(ev.text); }
+          else if (ev.type === 'error') { a.body.innerHTML = `<span class="down">${esc(ev.message)}</span>`; }
+          else if (ev.type === 'done') {
+            const u = ev.usage || {};
+            a.usage.textContent = `本次用量：輸入 ${nf(u.input_tokens, 0)}／輸出 ${nf(u.output_tokens, 0)} tokens（模型 ${ev.model}）`;
+          }
+          scrollDown();
+        }
+      }
+    } catch (e) {
+      a.body.innerHTML = `<span class="down">無法完成：${esc(e.message)}</span>`;
+    } finally {
+      if (answer) history.push({ role: 'assistant', content: answer });
+      else history.pop();                         // 失敗的提問不留在對話紀錄，避免連續兩則 user
+      busy = false; sendBtn.disabled = false; input.focus(); scrollDown();
+    }
+  }
+
+  async function refreshStatus() {
+    try {
+      const s = await (await fetch('/api/chat/status')).json();
+      configured = !!s.configured;
+      $('chat-setup').hidden = configured;
+      input.disabled = sendBtn.disabled = !configured;
+      $('chat-status').textContent = configured ? `模型：${s.model}` : '';
+    } catch (e) { $('chat-status').textContent = '無法連線到本機伺服器'; }
+  }
+
+  $('chat-form').addEventListener('submit', (e) => { e.preventDefault(); send(input.value); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); }   // isComposing：避免中文輸入法選字時誤送出
+  });
+  document.querySelectorAll('#chat-chips button').forEach((b) => b.addEventListener('click', () => send(b.textContent)));
+
+  PAGES.chat = async () => { await refreshStatus(); if (configured) input.focus(); };
+})();
+</script>
+{% endraw %}
+{% endif %}
+
+<script>
 range = presetRange(180);          // 預設顯示近 6 個月
 syncRangeUI();
 route();
 </script>
-{% endraw %}
 </body>
 </html>

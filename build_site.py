@@ -55,8 +55,12 @@ def _with_change(rows: list[dict]) -> list[dict]:
     return out
 
 
-def build(out_dir: Path, db_path: Path, config_path: Path) -> list[str]:
-    """產生靜態網站，回傳有資料的股票代號清單。"""
+def build(out_dir: Path, db_path: Path, config_path: Path, chat_enabled: bool = False) -> list[str]:
+    """產生靜態網站，回傳有資料的股票代號清單。
+
+    chat_enabled 只有本機版（web/app.py）會開啟：對話功能需要伺服器端的 API 金鑰，
+    公開網站（GitHub Pages）是純靜態頁面，不包含這個分頁。
+    """
     with open(config_path, encoding="utf-8") as f:
         wanted = [str(s) for s in yaml.safe_load(f)["stocks"]]
 
@@ -132,6 +136,7 @@ def build(out_dir: Path, db_path: Path, config_path: Path) -> list[str]:
     )
     html = env.get_template("index.html").render(
         title=SITE_TITLE,
+        chat_enabled=chat_enabled,
         stocks=stocks,
         min_date=min(first_dates) if first_dates else "",     # 日期選擇器可選範圍
         max_date=max(last_dates) if last_dates else "",

@@ -66,6 +66,20 @@ CREATE TABLE IF NOT EXISTS total_institutional (
     buy INTEGER, sell INTEGER,
     PRIMARY KEY (date, name)
 );
+-- 月營收（date 為 FinMind 回傳的日期，revenue_year/revenue_month 為營收所屬年月，單位：元）
+CREATE TABLE IF NOT EXISTS month_revenue (
+    stock_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    revenue REAL, revenue_month INTEGER, revenue_year INTEGER,
+    PRIMARY KEY (stock_id, date)
+);
+-- 每日本益比、股價淨值比、殖利率（%）
+CREATE TABLE IF NOT EXISTS valuation (
+    stock_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    dividend_yield REAL, per REAL, pbr REAL,
+    PRIMARY KEY (stock_id, date)
+);
 """
 
 # 資料表 → 以哪個欄位區分「對象」（None 代表整張表只有一組）
@@ -75,6 +89,8 @@ _KEY_COLUMN = {
     "institutional": "stock_id",
     "foreign_holding": "stock_id",
     "total_institutional": None,
+    "month_revenue": "stock_id",
+    "valuation": "stock_id",
 }
 
 
@@ -179,6 +195,36 @@ def upsert_total_institutional(conn: sqlite3.Connection, rows: list[tuple]) -> i
     return _upsert(conn, "total_institutional", ["date", "name", "buy", "sell"], ["date", "name"], rows)
 
 
+def upsert_month_revenue(conn: sqlite3.Connection, rows: list[tuple]) -> int:
+    """rows: (stock_id, date, revenue, revenue_month, revenue_year)"""
+    return _upsert(conn, "month_revenue", ["stock_id", "date", "revenue", "revenue_month", "revenue_year"],
+                   ["stock_id", "date"], rows)
+
+
+def upsert_valuation(conn: sqlite3.Connection, rows: list[tuple]) -> int:
+    """rows: (stock_id, date, dividend_yield, per, pbr)"""
+    return _upsert(conn, "valuation", ["stock_id", "date", "dividend_yield", "per", "pbr"],
+                   ["stock_id", "date"], rows)
+
+
+def get_month_revenue(conn: sqlite3.Connection, stock_id: str) -> list[dict]:
+    """全部月營收，依營收所屬年月升冪。"""
+    rows = conn.execute(
+        "SELECT date, revenue, revenue_year, revenue_month FROM month_revenue WHERE stock_id = ? "
+        "ORDER BY revenue_year, revenue_month",
+        (stock_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_valuation(conn: sqlite3.Connection, stock_id: str, days: int = 100_000) -> list[dict]:
+    rows = conn.execute(
+        "SELECT date, dividend_yield, per, pbr FROM valuation WHERE stock_id = ? ORDER BY date DESC LIMIT ?",
+        (stock_id, days),
+    ).fetchall()
+    return [dict(r) for r in reversed(rows)]
+
+
 def _macd_select(conn: sqlite3.Connection) -> str:
     """舊版資料庫（尚未有 MACD 欄位）時以 NULL 代替，讓唯讀端不會出錯。"""
     cols = {r[1] for r in conn.execute("PRAGMA table_info(indicators)")}
@@ -275,5 +321,6 @@ __all__ = [
     "open_db", "upsert_prices", "upsert_indicators", "upsert_index_prices", "upsert_institutional",
     "upsert_foreign_holding", "upsert_total_institutional", "get_history", "get_latest", "has_date",
     "last_date", "last_date_in", "get_index_series", "get_institutional", "get_foreign_holding",
-    "get_total_institutional", "log_fetch", "ROOT", "DEFAULT_DB", "closing",
+    "get_total_institutional", "upsert_month_revenue", "upsert_valuation", "get_month_revenue",
+    "get_valuation", "log_fetch", "ROOT", "DEFAULT_DB", "closing",
 ]
